@@ -98,6 +98,71 @@ WORKFLOW.md and takeover-prompt.md aligned to the same 3 steps that
 CLAUDE.md uses. takeover-prompt.md adds 4 takeover-specific steps as
 a clearly-marked extension.
 
+## v0.3.0 additions (post-initial release)
+
+The first eight phases built the **coordination layer** (one SSOT,
+enforced gates, schema-validated handoffs). v0.3.0 adds three more
+layers on top:
+
+### Expertise skills (opinionated code work)
+
+Four skills replace ad-hoc requests like "review this" or "find a
+bug" with structured, Karpathy-aligned workflows. Each ships with
+a Red Flags rationalization table (the common excuses that get
+blocked) plus an explicit "When NOT to" section.
+
+- `/code-review` — five lenses + Karpathy guardrails + default
+  REQUEST_CHANGES verdict.
+- `/refactor-simplify` — net-line negative discipline; the bias
+  is delete / inline / rename, never add.
+- `/test-gen` — behavior list first, user confirms, then pytest
+  scaffold writes. No-silent-write rule.
+- `/debug` — hypothesis-first; never applies a fix in the same
+  turn as diagnosis.
+
+These are independent of the workflow chain — you can /debug a
+failure without going through /brainstorm.
+
+### Workflow chain (spec → plan → execute)
+
+Adapted from obra/superpowers. Three skills enforce upstream
+artifacts before downstream skills can run:
+
+```
+/brainstorm        →  .agent/contracts/<slug>.md   (Status: pending → approved)
+   |
+/write-plan        →  .agent/plans/<slug>.md       (Status: pending → approved)
+   |
+/execute-plan      →  per-task subagent loop with /code-review gate
+                      one commit per task
+                      contract status: done at the end
+```
+
+Each downstream skill refuses to run if the upstream artifact is
+still pending. The chain plugs into existing `.agent/contracts/` —
+no new directory invented.
+
+### Productive PostToolUse layer
+
+The first PostToolUse hook that is productive (vs the defensive
+PreToolUse gates). Optional `post-edit-format.sh` reformats
+touched files via `ruff format` / `prettier --write` / `shfmt -w`
+based on extension. Productive hooks never block; they exit 0
+regardless. The defensive gates remain the security boundary.
+
+### SessionStart additionalContext injection
+
+The SessionStart hook now emits a JSON payload (Claude Code's
+`hookSpecificOutput.additionalContext` channel) that injects the
+live workspace bootstrap directly into the session context. The
+hook auto-detects which skills, gates, and productive layers are
+actually present and adapts the bootstrap text accordingly — so
+the cloning user sees an accurate snapshot of *their* deployment,
+not the template defaults.
+
+Net effect: turn 0 of every session already knows what's active,
+without relying on CLAUDE.md being re-read.
+
 ## What this harness does not solve
 
 - It does not synchronize **concurrent agent execution**. The model

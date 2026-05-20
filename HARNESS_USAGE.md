@@ -11,10 +11,17 @@ For *why* each piece exists, see [docs/design.md](docs/design.md). For
 
 Two things happen automatically:
 
-1. **`SessionStart` hook fires** and warns on stderr if anything is
-   stale — `CURRENT.md` older than 24h, any `.agent/status/<slice>.md`
-   older than 7d, or `project_*` memory leak (see
-   [docs/concepts/memory-policy.md](docs/concepts/memory-policy.md)).
+1. **`SessionStart` hook fires** and does two things in one pass:
+   - **stderr warnings** if state is stale — `CURRENT.md` older than
+     24h, any `.agent/status/<slice>.md` older than 7d, or
+     `project_*` memory leak (see
+     [docs/concepts/memory-policy.md](docs/concepts/memory-policy.md)).
+   - **stdout JSON `additionalContext` injection** — the live
+     workspace bootstrap (CURRENT.md frontmatter + detected skills +
+     enabled gates + memory policy + 3-step ritual) is pushed into
+     the session context. The bootstrap reflects your actual
+     deployment, not template defaults — enabling optional hooks
+     lights up extra lines automatically.
 2. **The 3-step ritual** from `CLAUDE.md` (or `AGENTS.md` for Codex)
    loads into context.
 
@@ -33,6 +40,51 @@ If the work area is not obvious, start with **`/route "<one-liner>"`**.
 ---
 
 ## 2. Slash commands
+
+The template ships **11 slash skills** in three categories.
+
+### Process (cross-agent coordination)
+
+`/handoff`, `/slice-status`, `/contract-check`, `/route` — see
+their detailed sections below.
+
+### Expertise (opinionated code work)
+
+`/code-review`, `/refactor-simplify`, `/test-gen`, `/debug` — each
+carries Karpathy 4-principle guardrails (Think Before Coding /
+Simplicity First / Surgical Changes / Goal-Driven) and a Red
+Flags rationalization table.
+
+- `/code-review [<file-path> | <commit>..<commit> | PR#]` — 5
+  lenses (correctness / design / simplicity / surgicality /
+  testability). Default verdict `REQUEST_CHANGES`; APPROVE
+  requires active checking.
+- `/refactor-simplify <path>` — find what to **delete / inline /
+  rename**. Net-line negative required. Test gate at Step 0
+  refuses behavior-changing refactor on uncovered code.
+- `/test-gen <file::function | diff>` — pytest scaffold. Step 3
+  proposes a behavior list (3-7 cases), Step 4 pauses for user
+  confirm, then writes. Honest invariant assertions when expected
+  output isn't known.
+- `/debug <symptom>` — hypothesis-first failure diagnosis. Six
+  lenses (recent change / boundary / wrong assumption /
+  concurrency / wrong env / test artifact). Proposes ONE
+  distinguishing diagnostic command, never a fix in the same turn.
+
+### Workflow (spec → plan → execute chain)
+
+Three-skill pipeline. Each skill **refuses** to advance if the
+upstream artifact is still `Status: pending`.
+
+- `/brainstorm "<topic>"` — Socratic spec gate. Drafts a contract
+  at `.agent/contracts/<slug>.md`. HARD-GATE: no source edits
+  during brainstorm.
+- `/write-plan <contract-path>` — decomposes approved contract
+  into 2-5 minute tasks at `.agent/plans/<slug>.md`. Each task
+  has a mandatory verification command.
+- `/execute-plan <plan-path>` — subagent task loop. Per task:
+  delegate → `/code-review` the diff → commit. One commit per
+  task. Hard stops on approval-gate triggers and scope creep.
 
 ### `/handoff [one-line note]`
 **When**: end of session, context < 20%, switching agents, before a

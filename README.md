@@ -17,9 +17,16 @@ files (CURRENT.md, status, contracts) rather than chat history.
 - **Enforcement hooks** (`PreToolUse`, `SessionStart`, `Stop`) that
   turn prose policies into actual blocks — force pushes, hard resets,
   rm -rf on shared storage, etc.
-- **Native primitives wired in**: `.claude/skills/` for slash commands,
+- **Native primitives wired in**: `.claude/skills/` ships **11 slash
+  skills** (4 process + 4 expertise + 3 workflow-chain),
   `.claude/agents/` for restricted-tool subagents, `.claude/hooks/`
-  for enforcement.
+  for enforcement *and* productivity (optional `post-edit-format.sh`).
+- **SessionStart additionalContext injection**: bootstrap state +
+  detected inventory pushed into context at turn 0; no reliance on
+  CLAUDE.md being re-read.
+- **Spec → Plan → Execute chain** (`/brainstorm`, `/write-plan`,
+  `/execute-plan`): obra/superpowers-style workflow discipline
+  plugged into the existing `.agent/contracts/` lifecycle.
 - **Slice + routing system** so multi-workstream projects don't blur
   boundaries between work areas.
 - **Memory policy** that prevents the auto-memory private-context leak
