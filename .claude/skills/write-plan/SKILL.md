@@ -1,0 +1,158 @@
+---
+name: write-plan
+description: Decompose an APPROVED contract into a sequence of 2-5 minute tasks. Each task has a name, prereq tasks, files touched, expected diff shape, and verification command. Produces .agent/plans/<slug>.md. Use only after /brainstorm and contract approval; refuse if the input contract is still status:pending.
+argument-hint: "<path to approved .agent/contracts/<slug>.md>"
+allowed-tools: Read Grep Edit Write Bash(ls:*) Bash(cat:*) Bash(grep:*) Bash(find:*)
+---
+
+# /write-plan — Decompose spec into tasks
+
+A contract states *what* and *why*. A plan states *how, in order*.
+Each step in the plan is small enough that a focused agent can
+execute it in 2-5 minutes with one diff.
+
+## Step 1 — Verify input
+
+`$ARGUMENTS` must be a path to a contract file under
+`.agent/contracts/`. If empty, list available contracts and ask
+which to plan:
+
+```bash
+ls .agent/contracts/*.md | grep -v _template
+```
+
+Open the contract and check:
+- `Status: approved` — REQUIRED. If `pending`, refuse: "Contract
+  is not approved. Wait for explicit approval before planning."
+- `Success criteria` non-empty.
+- `Out of scope` non-empty (or explicit "none").
+
+If any check fails, route back to /brainstorm with a clear
+message naming the missing piece.
+
+## Step 2 — Identify the order of operations
+
+Most plans follow a phase order. Pick the phases relevant to this
+contract:
+
+| Phase | What happens |
+|---|---|
+| **Setup** | New directories, env vars, dependency additions, sandbox prep. |
+| **Schema / data** | Migration, fixture, sample data, type definitions. |
+| **Core** | The actual change to source. Often the largest phase. |
+| **Glue** | Wiring core into callers / config / CLI / API surface. |
+| **Tests** | Red tests first (one per success-criterion bullet from the contract), then green by the time core lands. |
+| **Docs / handoff** | README / docstring / status file / CURRENT.md update. |
+
+Not every plan needs every phase. Skip the ones that don't apply.
+
+## Step 3 — Decompose each phase into 2-5 minute tasks
+
+**Task size rule**: if writing the task description takes longer
+than 2 minutes, the task is too big — split it. Concretely:
+
+- One task = one logical diff (one file, or two tightly-coupled
+  files).
+- One task = one verification command that proves it's done.
+- One task = one place to roll back if it goes wrong.
+
+For each task:
+
+```markdown
+## Task <N>: <imperative-name>
+
+- **Status**: pending
+- **Prereq tasks**: <comma-separated task numbers, or "none">
+- **Files touched**: <real paths, no globs>
+- **Change shape**: <one-paragraph description of the diff —
+  what's added / removed / moved>
+- **Verification**: `<exact command>` → `<expected output>` (or
+  `<expected file:line shape>`)
+- **Estimated time**: <2-5 min>
+- **Rollback (if this task only)**: <command or instruction>
+```
+
+The verification field is mandatory. "Visual inspection" is not a
+verification. "Tests pass" is not a verification — name the
+specific test or assertion.
+
+## Step 4 — Order with explicit dependencies
+
+The default order is the phase order from Step 2. Within a phase,
+order so each task's prereqs are already done. Use explicit
+`Prereq tasks:` references — never assume implicit order.
+
+If two tasks are independent (no shared files, no overlapping
+behavior change), mark them `Prereq tasks: none` even if they
+appear in the same phase — this signals they can run in parallel
+worktrees.
+
+## Step 5 — Write the plan file
+
+Path: `.agent/plans/<slug>.md` where `<slug>` matches the
+contract filename (without the `.md` extension if you prefer, but
+keep them parallel).
+
+Frontmatter:
+
+```yaml
+---
+contract: .agent/contracts/<slug>.md
+slice: <slice from contract>
+status: pending
+total_tasks: <N>
+estimated_total_min: <sum>
+---
+```
+
+Then the numbered task list from Step 3.
+
+## Step 6 — Show the plan, wait for approval
+
+Print:
+
+```
+Plan drafted: .agent/plans/<slug>.md
+  Tasks: <N>
+  Estimated: <total> min
+  First task: Task 1 — <name>
+
+Next step: review the plan. When approved, run /execute-plan with this path.
+```
+
+The user marks the plan `status: approved` (manually editing the
+frontmatter) before /execute-plan can start.
+
+## Karpathy alignment
+
+- **Surgical Changes**: one task = one logical diff. Bundling is
+  rejected at decomposition time.
+- **Goal-Driven**: every task has a verification command. "Done"
+  is observable.
+- **Simplicity First**: 2-5 minute task size keeps each step
+  reviewable by a /code-review pass.
+- **Think Before Coding**: the plan IS the think step for
+  implementation; /execute-plan only executes what's already
+  decomposed.
+
+## Red Flags
+
+| Rationalization | Reality |
+|---|---|
+| "Task: implement the whole feature." | If a single task implements a feature, the plan has 1 task. Split until each task is reviewable in isolation. |
+| "Tests at the end." | Tests interleave. Red test for criterion A first, then code that makes it green, then move to criterion B. Bulk-tests-last hides progress. |
+| "Refactor X first, then add feature." | Refactor is its own contract, not a hidden phase in a feature plan. If the refactor is necessary, link to its own approved contract from the plan. |
+| "We'll figure out verification when we get there." | The verification is the success criterion from the contract, broken down. If you can't name it now, the contract was vague — go back to /brainstorm. |
+| "Task: misc cleanup." | "Misc" is not a task. Either it's a Surgical Changes violation (cut it) or it's a real task (name it). |
+| "Estimated 30 minutes." | A 30-minute "task" is 6 tasks pretending to be one. Split. |
+
+## Forbidden
+
+- Do NOT plan against a contract whose status is not `approved`.
+- Do NOT skip the verification field on any task.
+- Do NOT include phases that aren't in this contract's scope
+  ("while we're here let's also...").
+- Do NOT advance to /execute-plan in the same turn — the user
+  must explicitly approve the plan.
+- Do NOT bundle tests + code + docs into a single task because
+  "they're related". Three tasks: red test, green code, doc.
