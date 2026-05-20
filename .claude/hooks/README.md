@@ -28,6 +28,7 @@ Under `optional/`. Copy to this directory and add to
 |---|---|---|
 | `optional/pre-bash-slurm-gate.sh` | `PreToolUse` (Bash) | Block `sbatch` submission unless a contract under `.agent/contracts/` was modified in the last 7 days. For HPC users. |
 | `optional/pre-bash-db-gate.sh` | `PreToolUse` (Bash) | Block `psql ... DROP TABLE / TRUNCATE / ALTER TABLE`. For PostgreSQL users. |
+| `optional/post-edit-format.sh` | `PostToolUse` (Edit\|Write\|MultiEdit) | Auto-format files after edit. Ships with `ruff format` for Python, prettier for JS/TS/JSON/MD/YAML, shfmt for shell — runs only if the formatter is installed. Always exit 0 (productive, never blocks). |
 
 ## Matching policy (all blocking hooks)
 
