@@ -1,0 +1,1 @@
+{"tool_name":"Bash","tool_input":{"command":"git commit -m \"$(cat <<EOF\nfix(rm): handle rm -rf /mnt/data edge case\nEOF\n)\""}}

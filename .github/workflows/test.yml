@@ -1,0 +1,72 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install jq
+        run: |
+          if ! command -v jq >/dev/null 2>&1; then
+            if [ "$RUNNER_OS" = "Linux" ]; then
+              sudo apt-get update && sudo apt-get install -y jq
+            else
+              brew install jq
+            fi
+          fi
+          jq --version
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Validate JSON
+        run: |
+          python3 -m json.tool .claude/settings.json > /dev/null
+          python3 -m json.tool .claude/settings.local.json.example > /dev/null
+
+      - name: bash -n on all shell scripts
+        run: |
+          fail=0
+          while IFS= read -r f; do
+            if ! bash -n "$f"; then
+              echo "FAIL: $f"
+              fail=1
+            fi
+          done < <(find . -type f -name '*.sh' -not -path './.git/*')
+          exit $fail
+
+      - name: Run hook tests
+        run: bash tests/run-hook-tests.sh
+
+      - name: Smoke-test handoff.sh
+        run: |
+          git config user.email "ci@test"
+          git config user.name "ci"
+          ./scripts/handoff.sh ci-test
+          test -L .agent/handoffs/state/latest
+          test -f .agent/handoffs/state/latest/meta.txt
+          grep -q "current_version: 1" .agent/handoffs/state/latest/meta.txt
+          # Second run should bump to 2
+          ./scripts/handoff.sh ci-test
+          grep -q "current_version: 2" .agent/handoffs/state/latest/meta.txt
+
+      - name: Smoke-test init-slice.sh
+        run: |
+          ./scripts/init-slice.sh ci-slice
+          test -f .agent/status/ci-slice.md
+          test -f .agent/projects/ci-slice-harness.md

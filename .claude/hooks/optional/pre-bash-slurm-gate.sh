@@ -11,7 +11,8 @@
 # MAX_CONTRACT_AGE_DAYS for your workflow.
 set -uo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# Script is at .claude/hooks/optional/, so workspace root is three up.
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 # === Customize ===
 MAX_CONTRACT_AGE_DAYS=7
