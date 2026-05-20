@@ -2,6 +2,84 @@
 
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] - 2026-05-20
+
+Three new capability layers added on top of the v0.2.x coordination
+foundation. All v0.2.x behavior preserved; this is purely additive.
+
+### Added — Expertise skills (4)
+Opinionated, Karpathy-aligned skills with Red Flags rationalization
+tables and "When NOT to" sections. Independent of the workflow chain.
+
+- `/code-review` — reviews a diff through 5 lenses (correctness /
+  design / simplicity / surgicality / testability) + Karpathy
+  guardrails. Default verdict REQUEST_CHANGES; APPROVE requires
+  active checking. Refuses to review > 500-line diffs.
+- `/refactor-simplify` — proactively scans for what to DELETE /
+  INLINE / RENAME. Net-line negative required. Test gate at Step
+  0 refuses behavior-changing refactor on uncovered code.
+- `/test-gen` — pytest scaffold generator. Step 3 lists behaviors
+  (3-7 cases); Step 4 pauses for user confirm; Step 5 writes file
+  with parametrize / pytest.raises / honest invariant assertions.
+  No-silent-write rule.
+- `/debug` — hypothesis-first failure diagnosis. Six lenses;
+  proposes ONE distinguishing diagnostic command, never a fix in
+  the same turn. allowed-tools excludes Edit/Write.
+
+### Added — Workflow chain (3 skills, obra/superpowers adaptation)
+
+Three skills enforce upstream artifacts before downstream can run.
+Plugs into existing `.agent/contracts/`; introduces `.agent/plans/`.
+
+- `/brainstorm "<topic>"` — Socratic spec gate. 5 high-leverage
+  questions (success criterion / out-of-scope / constraints /
+  rollback / approval gates) → contract draft. HARD-GATE: no
+  source edits during brainstorm.
+- `/write-plan <contract-path>` — refuses to plan against a
+  pending contract. Decomposes approved spec into 2-5 minute
+  tasks with mandatory verification field. Phases:
+  setup / schema / core / glue / tests / docs.
+- `/execute-plan <plan-path>` — subagent task loop. Per task:
+  delegate to subagent → `/code-review` the diff → spec-conformance
+  check → one commit. Hard stops on approval-gate triggers, scope
+  creep, consecutive review failures.
+
+### Added — `.agent/plans/` directory
+
+New directory with README documenting the contract → plan →
+execute lifecycle and per-task structure (status / prereqs /
+files / change-shape / verification / estimate / rollback).
+
+### Added — Productive PostToolUse hook (optional)
+
+First productive (vs defensive) hook: `optional/post-edit-format.sh`.
+Reformats touched files via `ruff format` (.py), `prettier --write`
+(.js/ts/json/md/yaml), or `shfmt -w` (.sh). Auto-detects which
+formatters are installed; missing formatter or missing jq → silent
+skip. Always exits 0 — productivity layer never blocks.
+
+### Changed — SessionStart hook
+
+`session-start-decay-check.sh` extended with a second job:
+- **stderr** (unchanged): warnings on stale CURRENT.md / status /
+  memory leak.
+- **stdout JSON** (new): `hookSpecificOutput.additionalContext`
+  payload injecting workspace bootstrap directly into session
+  context at turn 0. Auto-detects which skills, gates, and
+  productive hooks are actually present and adapts the bootstrap
+  text accordingly.
+
+Effect: no reliance on CLAUDE.md being re-read at session start.
+The active context reflects the live deployment (not template
+defaults) within the first turn.
+
+### Skill inventory
+
+Now 11 skills in 3 categories:
+- **Process** (4): `/handoff`, `/slice-status`, `/contract-check`, `/route`
+- **Expertise** (4): `/code-review`, `/refactor-simplify`, `/test-gen`, `/debug`
+- **Workflow** (3): `/brainstorm`, `/write-plan`, `/execute-plan`
+
 ## [0.2.1] - 2026-05-20
 
 ### Fixed
