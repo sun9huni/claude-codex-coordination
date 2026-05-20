@@ -59,12 +59,13 @@ fi
 # uses. Stop hook warns if active_slice is outside the set. Add your
 # slices as you create them under .agent/status/ and the WORKFLOW.md
 # §1 routing table.
+#
+# This validator uses Python stdlib only. If PyYAML is present we
+# use it for richer type checks; if not we fall back to a minimal
+# line-based parser that still catches missing keys, count
+# violations, and stale dates.
 python3 - "$current" <<'PY' 2>&1 1>&2 || true
 import sys, re, datetime
-try:
-    import yaml
-except ImportError:
-    sys.exit(0)  # yaml not installed; skip rather than fail noisily.
 
 # === Customize for your project ===
 VALID_SLICES = set()   # e.g. {"backend", "frontend", "ml-pipeline"} — fill as you add slices.
@@ -78,12 +79,51 @@ m = re.match(r'\A---\s*\n(.*?)\n---\s*\n', text, re.DOTALL)
 if not m:
     print(f"[handoff-check] CURRENT.md missing yaml frontmatter. Add schema_version: 1 block at top.", file=sys.stderr)
     sys.exit(0)
+block = m.group(1)
 
+# --- Try PyYAML; if missing, use a stdlib mini-parser ---
 try:
-    fm = yaml.safe_load(m.group(1)) or {}
-except yaml.YAMLError as e:
-    print(f"[handoff-check] CURRENT.md frontmatter is invalid YAML: {e}", file=sys.stderr)
-    sys.exit(0)
+    import yaml
+    try:
+        fm = yaml.safe_load(block) or {}
+    except yaml.YAMLError as e:
+        print(f"[handoff-check] CURRENT.md frontmatter is invalid YAML: {e}", file=sys.stderr)
+        sys.exit(0)
+except ImportError:
+    # Mini-parser: handles the subset we actually use — scalars,
+    # ISO dates, list-of-string blocks ("key:" + "  - item"). Good
+    # enough to validate the required fields without PyYAML.
+    fm = {}
+    cur_list_key = None
+    for line in block.splitlines():
+        if not line.strip():
+            continue
+        if cur_list_key and re.match(r'^\s+-\s', line):
+            fm[cur_list_key].append(re.sub(r'^\s+-\s+', '', line).strip().strip('"').strip("'"))
+            continue
+        cur_list_key = None
+        mkv = re.match(r'^([A-Za-z_][A-Za-z0-9_-]*):\s*(.*)$', line)
+        if not mkv:
+            continue
+        key, val = mkv.group(1), mkv.group(2).rstrip()
+        if val == "":
+            fm[key] = []          # may turn into list when items follow
+            cur_list_key = key
+        elif val in ("~", "null"):
+            fm[key] = None
+        elif val.lower() in ("true", "false"):
+            fm[key] = (val.lower() == "true")
+        else:
+            v = val.strip().strip('"').strip("'")
+            if re.fullmatch(r'\d{4}-\d{2}-\d{2}', v):
+                try:
+                    v = datetime.date.fromisoformat(v)
+                except ValueError:
+                    pass
+            elif re.fullmatch(r'-?\d+', v):
+                v = int(v)
+            fm[key] = v
+    # An empty-value key followed by no list items stays as []; that's fine.
 
 errs = []
 required = ["owner_agent", "last_updated", "active_slice", "remaining_actions"]
