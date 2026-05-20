@@ -14,6 +14,7 @@ remaining_actions:
 approval_required: []
 contract_pointers: []
 schema_version: 1
+version: 0
 ---
 
 <!--

@@ -24,12 +24,18 @@ remaining_actions:                  # 1-3 items
   - "first concrete next step"
   - "..."
 schema_version: 1
+version: <integer, bumped by handoff.sh on every snapshot>
 ---
 ```
 
 Optional but recommended: `session_title`, `files_touched_count`,
 `verification_run`, `verification_result`, `failure_log`,
 `prior_slice_archive`, `approval_required`, `contract_pointers`.
+
+The `version` field is managed by `./scripts/handoff.sh` — you do
+not edit it by hand. It increments on every successful handoff
+snapshot and is used by the Stop hook to detect "agent did not run
+/handoff this session".
 
 ## Required Markdown body sections
 

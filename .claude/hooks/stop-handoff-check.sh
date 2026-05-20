@@ -18,6 +18,26 @@ if [ "$age_min" -gt 60 ]; then
     } >&2
 fi
 
+# Detect "agent forgot to bump version since last handoff snapshot".
+# handoff.sh increments .agent/handoffs/CURRENT.md `version` and records
+# `current_version` in state/latest/meta.txt. If they match at Stop time,
+# either /handoff was never called this session OR no real changes were
+# made. Both worth warning about.
+latest_meta="$ROOT/.agent/handoffs/state/latest/meta.txt"
+if [ -f "$latest_meta" ]; then
+    snap_version=$(awk -F': *' '/^current_version:/ { print $2 }' "$latest_meta" | tr -d '[:space:]')
+    fm_version=$(awk '
+        /^---$/ { in_fm = !in_fm; next }
+        in_fm && /^version:/ { print $2; exit }
+    ' "$current" | tr -d '[:space:]')
+    if [ -n "${snap_version:-}" ] && [ -n "${fm_version:-}" ] && [ "$snap_version" = "$fm_version" ]; then
+        {
+            echo "[handoff-check] CURRENT.md version ($fm_version) has not changed since the last snapshot."
+            echo "Run /handoff or ./scripts/handoff.sh <agent> to record this session's state."
+        } >&2
+    fi
+fi
+
 # Schema validation of the yaml frontmatter.
 #
 # Customize: VALID_SLICES below is the set of slice names your project

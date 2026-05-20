@@ -111,9 +111,10 @@ Thumbs.db
 !.claude/settings.local.json
 
 # -------- The harness's own scratch / state --------
-.agent/handoffs/state/diff.patch
-.agent/handoffs/state/diff-staged.patch
-.agent/handoffs/state/git-status.txt
-.agent/handoffs/state/git-log.txt
-.agent/handoffs/state/meta.txt
+# Session snapshots are stamped per run under state/sessions/<ts>-<agent>/.
+# They are reproducible from git history + diff so we do not track them.
+.agent/handoffs/state/sessions/
+.agent/handoffs/state/latest
+# OWNER.lock is the flock target; it has no useful contents.
+.agent/handoffs/OWNER.lock
 .agent/scratch/

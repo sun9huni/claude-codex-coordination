@@ -53,17 +53,25 @@ goes under `.codex/`. Cursor uses its own conventions.
 ## What the model does NOT provide
 
 ### Concurrency
-Two agents writing `CURRENT.md` at the same time will race. The
-file has no version, no lock, no CAS. The model assumes one active
-agent at a time. If you actually need concurrent agents, add:
+**Handoff-level**: `scripts/handoff.sh` uses `flock` on
+`.agent/handoffs/OWNER.lock` (exclusive, 30s timeout) and bumps the
+`version` field in CURRENT.md frontmatter atomically (.tmp + mv).
+Two concurrent handoffs serialize correctly.
 
-- An `OWNER.lock` file with a PID and heartbeat.
-- A `version` field in `CURRENT.md` frontmatter, bumped atomically.
-- Conflict detection at write time.
+**Agent-level**: while an agent is editing `CURRENT.md` directly
+(via the Edit tool, between handoffs), no lock is held. If two
+agents edit at the same time, the later write wins silently. The
+practical mitigation is to keep "one active agent at a time" as a
+human convention; the Stop hook's `version monotonicity` check
+detects "agent forgot to call /handoff" but not "two agents
+overlapped".
 
-These are not in this template because the practical pattern is
-sequential. Worktree-based parallelism within one agent's session
-is supported by Claude's built-in `EnterWorktree`.
+If you need true concurrent agents, add an `OWNER.lock` heartbeat
+(periodically `touch`) plus a check at session-start that refuses
+to take over while another agent's heartbeat is fresh. That is not
+in this template because the practical pattern is sequential.
+Worktree-based parallelism within one agent's session is supported
+by Claude's built-in `EnterWorktree`.
 
 ### Cross-agent state in agent-private memory
 What lives in Claude's auto-memory, Codex's session DB, or Cursor's
