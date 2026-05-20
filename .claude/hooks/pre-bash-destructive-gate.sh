@@ -18,6 +18,16 @@ set -uo pipefail
 SHARED_PATHS_REGEX='(/mnt/|/shared/|/data/|/srv/)'
 # ======================================
 
+# Fail-closed if jq is missing — without it we cannot reliably parse
+# the hook input JSON, so the hook would silently let everything pass.
+if ! command -v jq >/dev/null 2>&1; then
+    {
+        echo "BLOCKED: jq is required by this hook but is not on PATH."
+        echo "Install jq or remove this hook from .claude/settings.json."
+    } >&2
+    exit 2
+fi
+
 input=$(cat)
 [ "$(jq -r '.tool_name // ""' <<< "$input")" = "Bash" ] || exit 0
 cmd=$(jq -r '.tool_input.command // ""' <<< "$input")

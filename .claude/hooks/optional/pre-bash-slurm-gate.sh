@@ -17,6 +17,15 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 MAX_CONTRACT_AGE_DAYS=7
 # =================
 
+# Fail-closed if jq is missing.
+if ! command -v jq >/dev/null 2>&1; then
+    {
+        echo "BLOCKED: jq is required by this hook but is not on PATH."
+        echo "Install jq or remove this hook from .claude/settings.json."
+    } >&2
+    exit 2
+fi
+
 input=$(cat)
 tool_name=$(jq -r '.tool_name // ""' <<< "$input")
 [ "$tool_name" = "Bash" ] || exit 0
