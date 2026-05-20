@@ -5,6 +5,11 @@
     "allow": [],
     "additionalDirectories": []
   },
+  "statusLine": {
+    "type": "command",
+    "command": "./.claude/statusline.sh",
+    "padding": 1
+  },
   "hooks": {
     "SessionStart": [
       {
@@ -24,6 +29,17 @@
           {
             "type": "command",
             "command": "./.claude/hooks/pre-bash-destructive-gate.sh"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./.claude/hooks/pre-compact-inject.sh"
           }
         ]
       }

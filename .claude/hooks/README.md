@@ -9,10 +9,15 @@ allow / exit 2 = block. Stderr is fed back to Claude on block.
 | Hook | Event | Purpose |
 |---|---|---|
 | `session-start-decay-check.sh` | `SessionStart` | Warn if `CURRENT.md` is older than 24h or a `.agent/status/<slice>.md` is older than 7d. Also catches `project_*` memory leak regressions. Non-blocking. |
-| `pre-bash-destructive-gate.sh` | `PreToolUse` (Bash) | Block `rm -rf` on shared / harness dirs, `git push --force`, `git reset --hard origin/...`, `git branch -D`. |
-| `stop-handoff-check.sh` | `Stop` | Validate `.agent/handoffs/CURRENT.md` yaml frontmatter against schema_version 1. Warn if file was not updated in the last hour. Non-blocking. |
+| `pre-bash-destructive-gate.sh` | `PreToolUse` (Bash) | Block `rm -rf` on shared / harness dirs, `git push --force`, `git reset --hard origin/...`, `git branch -D`. Fail-closed if `jq` is missing. |
+| `pre-compact-inject.sh` | `PreCompact` | Emit the current `CURRENT.md` content so workspace state survives context compaction. Non-blocking. |
+| `stop-handoff-check.sh` | `Stop` | Validate `.agent/handoffs/CURRENT.md` yaml frontmatter against schema_version 1 (stdlib-only fallback if PyYAML missing). Compares CURRENT.md `version` against last snapshot to detect "agent forgot to /handoff". Non-blocking. |
 
 Registered in `../settings.json`.
+
+Plus a `statusLine` running `../statusline.sh` which surfaces the
+current model, active slice, CURRENT.md owner / version / age, and
+context window %. Customize the format string in the script.
 
 ## Optional hooks (opt-in)
 
