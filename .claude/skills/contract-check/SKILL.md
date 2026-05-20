@@ -54,6 +54,17 @@ Copy `.agent/contracts/_template.md` to
 Then tell the user the contract path and pause for approval before
 proceeding with the work.
 
+## Red Flags
+
+| Rationalization | Reality |
+|---|---|
+| "Only 3 files, no contract needed." | File-count is one of several triggers, not the gate. Long-running-job / API-change / ranking-change triggers fire **independently** of file count. Check all triggers in `WORKFLOW.md §2`. |
+| "Similar contract exists — I'll just extend it." | Different scope, different contract. Extending an unrelated contract pollutes the audit trail. Fork a new file; reference the old one in `Pointers:` if relevant. |
+| "The expensive job is small / a smoke test — contract can wait." | If a SLURM gate (or equivalent) is enabled, submission is blocked anyway. Write the contract first, even if 5 lines. |
+| "I'll mark the contract approved myself after I write it." | Approval comes from the user, not from `/contract-check`. Status stays `pending` until the user says approved or edits the file directly. |
+| "The change is just a coefficient tweak — not really semantic." | If a downstream metric (an evaluation score, a ranking order, a user-visible output) could change, it's semantic. Trigger fires. |
+| "I'll act now and write the contract retroactively." | The contract is a *commitment*, not a *record*. Retroactive contracts have zero value — they're rationalization-as-paperwork. |
+
 ## Forbidden
 
 - Do NOT submit jobs, change ranking, or otherwise act on the work

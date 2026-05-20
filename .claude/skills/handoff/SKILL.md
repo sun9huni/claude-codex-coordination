@@ -67,6 +67,18 @@ Confirm:
 
 Report one line to the user: `handoff written, next: <first remaining action>`.
 
+## Red Flags
+
+| Rationalization | Reality |
+|---|---|
+| "See chat above for context." | Chat is not durable. Inline the facts the next agent needs. |
+| "I'll fill in placeholders later." | Now. `handoff.sh`'s stale-placeholder warning exists for this exact case. Leave none. |
+| "Owner agent: claude is the default — skip it." | Explicit owner prevents takeover-prompt.md ambiguity. Always set. |
+| "version: 0 is fine, I didn't really change anything." | If you ran any tool calls this session, state changed. The Stop hook compares version vs last snapshot — match is its own warning. |
+| "Files touched: the diff shows it." | The diff shows lines, not semantic groupings. List paths grouped by area when many. |
+| "Approval required: n/a for now, I'll update if needed." | If a gate is pending (deploy, DB, long-running job), name it now. The next agent acts on this list. |
+| "Verification: tests pass." | Cite the exact command + outcome ("`pytest -q` 47 passed in 12s"), or "not run" with reason. "Tests pass" without a command is unverifiable. |
+
 ## Forbidden
 
 - Do NOT write "see chat above" — inline the relevant facts.
