@@ -6,8 +6,10 @@
 #   next-agent: free-form label, e.g. claude, codex, cursor, human
 #
 # Concurrency model:
-#   - Acquires an exclusive flock on .agent/handoffs/OWNER.lock for the
+#   - Acquires an exclusive lock on .agent/handoffs/OWNER.lock for the
 #     duration of the run so two handoffs cannot interleave snapshots.
+#     Uses `flock` when available (Linux) and falls back to atomic
+#     `mkdir` of OWNER.lock.d (macOS/*BSD/anywhere).
 #   - Increments .agent/handoffs/CURRENT.md frontmatter `version` (used
 #     by Stop hook to detect "agent forgot to update CURRENT.md").
 #   - Writes a fresh snapshot under .agent/handoffs/state/sessions/
@@ -39,7 +41,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HANDOFF_DIR="$ROOT/.agent/handoffs"
 STATE_DIR="$HANDOFF_DIR/state"
 SESSIONS_DIR="$STATE_DIR/sessions"
-LOCK="$HANDOFF_DIR/OWNER.lock"
+LOCK_FILE="$HANDOFF_DIR/OWNER.lock"
+LOCK_DIR="$HANDOFF_DIR/OWNER.lock.d"
 CURRENT="$HANDOFF_DIR/CURRENT.md"
 
 mkdir -p "$SESSIONS_DIR"
@@ -50,11 +53,28 @@ if [ ! -f "$CURRENT" ]; then
 fi
 
 # Acquire the lock for the duration of the snapshot + version bump.
-# fd 200 holds it; trap releases on exit.
-exec 200>>"$LOCK"
-if ! flock -w 30 -x 200; then
-  echo "[handoff] error: could not acquire OWNER.lock within 30s — another handoff is running." >&2
-  exit 1
+# Prefer `flock` (Linux) for kernel-released semantics; fall back to
+# `mkdir`-based mutex (macOS/*BSD) — mkdir is atomic so the loser fails.
+if command -v flock >/dev/null 2>&1; then
+  exec 200>>"$LOCK_FILE"
+  if ! flock -w 30 -x 200; then
+    echo "[handoff] error: could not acquire OWNER.lock within 30s — another handoff is running." >&2
+    exit 1
+  fi
+else
+  # mkdir-based lock with 30s timeout. atexit cleanup via trap.
+  tries=0
+  while ! mkdir "$LOCK_DIR" 2>/dev/null; do
+    tries=$((tries + 1))
+    if [ $tries -ge 30 ]; then
+      echo "[handoff] error: could not acquire OWNER.lock.d within 30s — another handoff is running." >&2
+      echo "[handoff] If stale, remove '$LOCK_DIR' and retry." >&2
+      exit 1
+    fi
+    sleep 1
+  done
+  # shellcheck disable=SC2064
+  trap "rmdir '$LOCK_DIR' 2>/dev/null || true" EXIT
 fi
 
 stamp_iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"

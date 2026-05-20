@@ -115,6 +115,8 @@ Thumbs.db
 # They are reproducible from git history + diff so we do not track them.
 .agent/handoffs/state/sessions/
 .agent/handoffs/state/latest
-# OWNER.lock is the flock target; it has no useful contents.
+# OWNER.lock is the flock target; OWNER.lock.d is the mkdir-based
+# fallback mutex (macOS/*BSD). Both are empty / runtime-only.
 .agent/handoffs/OWNER.lock
+.agent/handoffs/OWNER.lock.d/
 .agent/scratch/
