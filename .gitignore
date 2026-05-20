@@ -1,0 +1,119 @@
+# =========================================================================
+# claude-codex-coordination — sensible defaults for a workspace using
+# this harness. Tracks: coordination layer (.agent/, .claude/ configs,
+# entry docs, scripts/). Ignores: runtime caches, session transcripts,
+# secrets, large binaries, project source repos (which have their own
+# .git).
+# =========================================================================
+
+# -------- Claude Code runtime (configs tracked, runtime ignored) --------
+.claude/cache/
+.claude/debug/
+.claude/downloads/
+.claude/file-history/
+.claude/ide/
+.claude/paste-cache/
+.claude/session-env/
+.claude/sessions/
+.claude/shell-snapshots/
+.claude/tasks/
+.claude/telemetry/
+.claude/todos/
+.claude/history.jsonl
+.claude/.credentials.json
+.claude/.last-cleanup
+.claude/mcp-needs-auth-cache.json
+.claude/policy-limits.json
+.claude/plans/*.md
+!.claude/plans/.gitkeep
+.claude/backups/.claude.json.backup.*
+.claude/plugins/marketplaces/
+# Session JSONL transcripts under projects/, keep memory/ subdirs
+.claude/projects/*/*.jsonl
+.claude/projects/*/[0-9a-f]*/
+.claude.json
+
+# -------- Codex runtime (skills + rules tracked, sessions/logs ignored) --
+.codex/sessions/
+.codex/logs*.sqlite
+.codex/logs*.sqlite-shm
+.codex/logs*.sqlite-wal
+.codex/state*.sqlite
+.codex/shell_snapshots/
+.codex/tmp/
+.codex/.tmp/
+.codex/history/
+
+# -------- Cursor runtime --------
+.cursor/
+.cursor-server/
+
+# -------- Common runtime caches --------
+.cache/
+.conda/
+.dgl/
+.keras/
+.dotnet/
+.local/
+.config/
+.nv/
+.parallel/
+.apptainer/
+.gemini/
+
+# -------- IDE --------
+.vscode/
+.vscode-server/
+
+# -------- Big binaries / archives (most likely not coordination state) --
+*.tar.gz
+*.tgz
+*.zip
+*.pkl
+*.ckpt
+*.pt
+*.bin
+*.h5
+*.npz
+*.dmg
+*.iso
+
+# -------- Plots / images / docs at root --------
+*.png
+*.jpg
+*.jpeg
+*.svg
+
+# -------- System / secrets --------
+.bash_history
+.viminfo
+.lesshst
+.python_history
+.sqlite_history
+.wget-hsts
+.ssh/
+.gitconfig
+*.pem
+*.key
+.env
+.env.*
+!.env.example
+
+# -------- Editor backups --------
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# -------- Override common global ~/.config/git/ignore patterns --
+# settings.local.json is workspace-scoped state in this harness, not
+# user-machine-local. Track it.
+!.claude/settings.local.json
+
+# -------- The harness's own scratch / state --------
+.agent/handoffs/state/diff.patch
+.agent/handoffs/state/diff-staged.patch
+.agent/handoffs/state/git-status.txt
+.agent/handoffs/state/git-log.txt
+.agent/handoffs/state/meta.txt
+.agent/scratch/

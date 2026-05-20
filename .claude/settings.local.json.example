@@ -1,0 +1,24 @@
+{
+  "// note": "Copy to .claude/settings.local.json and customize for your project. This file is tracked (intentional override of global ~/.config/git/ignore) so version history exists for the coordination layer.",
+  "permissions": {
+    "allow": [
+      "Bash(tail:*)",
+      "Bash(head:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(wc:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(awk:*)",
+      "Bash(sed:*)",
+      "Bash(sort:*)",
+      "Bash(uniq:*)",
+      "Bash(cut:*)",
+      "Bash(xargs:*)",
+      "Bash(make:*)",
+      "Bash(git:*)",
+      "Bash(./scripts/handoff.sh:*)",
+      "Bash(./scripts/verify.sh)"
+    ]
+  }
+}
