@@ -7,8 +7,23 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 current="$ROOT/.agent/handoffs/CURRENT.md"
 [ -f "$current" ] || exit 0
 
+# Portable mtime: GNU stat → BSD stat → Python fallback.
+file_mtime() {
+    stat -c %Y "$1" 2>/dev/null \
+        || stat -f %m "$1" 2>/dev/null \
+        || python3 -c "import os,sys; print(int(os.path.getmtime(sys.argv[1])))" "$1" 2>/dev/null \
+        || echo ""
+}
+
 now=$(date +%s)
-age_min=$(( (now - $(stat -c %Y "$current")) / 60 ))
+m=$(file_mtime "$current")
+if [ -z "$m" ]; then
+    # Can't read mtime — skip the stale-time check silently. The schema
+    # check below still runs.
+    age_min=0
+else
+    age_min=$(( (now - m) / 60 ))
+fi
 
 if [ "$age_min" -gt 60 ]; then
     {

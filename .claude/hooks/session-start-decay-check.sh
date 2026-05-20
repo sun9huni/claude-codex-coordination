@@ -6,14 +6,26 @@ set -uo pipefail
 # Resolve workspace root from script location (portable).
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
+# Portable mtime in seconds-since-epoch: try GNU stat, then BSD stat,
+# then Python as the universal fallback. Returns empty on total failure.
+file_mtime() {
+    stat -c %Y "$1" 2>/dev/null \
+        || stat -f %m "$1" 2>/dev/null \
+        || python3 -c "import os,sys; print(int(os.path.getmtime(sys.argv[1])))" "$1" 2>/dev/null \
+        || echo ""
+}
+
 now=$(date +%s)
 warnings=()
 
 current="$ROOT/.agent/handoffs/CURRENT.md"
 if [ -f "$current" ]; then
-    age_h=$(( (now - $(stat -c %Y "$current")) / 3600 ))
-    if [ "$age_h" -gt 24 ]; then
-        warnings+=("CURRENT.md is ${age_h}h old (>24h). Recheck handoff state before acting.")
+    m=$(file_mtime "$current")
+    if [ -n "$m" ]; then
+        age_h=$(( (now - m) / 3600 ))
+        if [ "$age_h" -gt 24 ]; then
+            warnings+=("CURRENT.md is ${age_h}h old (>24h). Recheck handoff state before acting.")
+        fi
     fi
 fi
 
@@ -21,9 +33,12 @@ for f in "$ROOT"/.agent/status/*.md; do
     [ -f "$f" ] || continue
     name=$(basename "$f")
     [ "$name" = "README.md" ] && continue
-    age_d=$(( (now - $(stat -c %Y "$f")) / 86400 ))
-    if [ "$age_d" -gt 7 ]; then
-        warnings+=("${name} is ${age_d}d old. Consider refreshing it.")
+    m=$(file_mtime "$f")
+    if [ -n "$m" ]; then
+        age_d=$(( (now - m) / 86400 ))
+        if [ "$age_d" -gt 7 ]; then
+            warnings+=("${name} is ${age_d}d old. Consider refreshing it.")
+        fi
     fi
 done
 
