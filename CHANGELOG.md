@@ -2,6 +2,15 @@
 
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.1] - 2026-05-20
+
+### Fixed
+- `scripts/handoff.sh` used `flock` unconditionally, which is
+  util-linux only. macOS CI broke with "flock: command not found".
+  Added a portable fallback: `flock` when available, otherwise an
+  atomic `mkdir OWNER.lock.d` mutex with trap-based cleanup. The
+  Linux path is unchanged; macOS / BSD now works.
+
 ## [0.2.0] - 2026-05-20
 
 External audit found 3 P1 and 4 P2 issues against v0.1.0. This
