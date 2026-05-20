@@ -8,7 +8,7 @@ allow / exit 2 = block. Stderr is fed back to Claude on block.
 
 | Hook | Event | Purpose |
 |---|---|---|
-| `session-start-decay-check.sh` | `SessionStart` | Warn if `CURRENT.md` is older than 24h or a `.agent/status/<slice>.md` is older than 7d. Also catches `project_*` memory leak regressions. Non-blocking. |
+| `session-start-decay-check.sh` | `SessionStart` | **Dual job**: (a) stderr warnings on stale `CURRENT.md` (>24h), stale `.agent/status/<slice>.md` (>7d), and `project_*` memory leak regressions. (b) stdout JSON `hookSpecificOutput.additionalContext` injecting the live workspace bootstrap (CURRENT.md frontmatter + detected skills + enabled gates + productive-hook presence + memory policy) into the session context. Non-blocking. |
 | `pre-bash-destructive-gate.sh` | `PreToolUse` (Bash) | Block `rm -rf` on shared / harness dirs, `git push --force`, `git reset --hard origin/...`, `git branch -D`. Fail-closed if `jq` is missing. |
 | `pre-compact-inject.sh` | `PreCompact` | Emit the current `CURRENT.md` content so workspace state survives context compaction. Non-blocking. |
 | `stop-handoff-check.sh` | `Stop` | Validate `.agent/handoffs/CURRENT.md` yaml frontmatter against schema_version 1 (stdlib-only fallback if PyYAML missing). Compares CURRENT.md `version` against last snapshot to detect "agent forgot to /handoff". Non-blocking. |
