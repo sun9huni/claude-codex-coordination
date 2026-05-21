@@ -123,6 +123,16 @@ project_* regression."
 This way the agent applies the rule even in earlier turns of future
 sessions.
 
+## 11. (Optional) Wire MCP servers
+
+If your workflows touch filesystems across multiple project repos,
+GitHub PRs, Postgres, Slack, etc., consider adding an `.mcp.json`.
+See [docs/concepts/mcp-servers.md](concepts/mcp-servers.md) for
+which servers pair well with this harness, recommended scopes, and
+the failure modes to plan for. **Skip MCP if none of the listed
+patterns fit your work** — it adds startup latency and auth surface
+for no return.
+
 ## When NOT to use parts of this template
 
 - **Single-agent workspaces**: you don't need cross-agent SSOT. Keep
