@@ -2,6 +2,36 @@
 
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.1] - 2026-05-21
+
+### Added
+- `tests/run-skill-lint.sh` — quality lint for every SKILL.md
+  (frontmatter shape, description length 60-400, Red Flags section,
+  Forbidden section, Red Flags table ≥ 3 rows). Wired into CI on
+  the ubuntu+macos matrix.
+- `scripts/new-skill.sh` — scaffolds a lint-passing SKILL.md
+  skeleton per category (`process | expertise | workflow`). CI
+  smoke-tests all three categories on each push.
+
+### Changed
+- `.claude/hooks/post-edit-format.sh` moved from `optional/` to the
+  default hooks directory and registered in `settings.json`
+  PostToolUse. Safe by default: every formatter (ruff / prettier /
+  shfmt) is detected at hook invocation; absent formatters → silent
+  no-op. To disable entirely, remove the hook entry from
+  `settings.json`.
+- `code-review` and `refactor-simplify` skill descriptions trimmed
+  to fit the new ≤400-char lint bound.
+- `route` and `slice-status` skills gained a `## Forbidden` section
+  (B3 lint rule).
+- `refactor-simplify` skill gained a `## Red Flags` table (7
+  entries) — B2/B4 lint rules.
+
+### Fixed
+- `session-start-decay-check.sh` SessionStart bootstrap heredoc no
+  longer contains an apostrophe; macOS bash 3.2 mis-parsed
+  `project's` inside `$(cat <<EOF ...)`. Linux was unaffected.
+
 ## [0.3.0] - 2026-05-20
 
 Three new capability layers added on top of the v0.2.x coordination

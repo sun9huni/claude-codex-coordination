@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
-# OPTIONAL HOOK: auto-format files after Edit/Write/MultiEdit.
+# Productive PostToolUse hook (enabled by default — see settings.json):
+# auto-format files after Edit/Write/MultiEdit.
 #
-# To enable:
-#   cp .claude/hooks/optional/post-edit-format.sh .claude/hooks/
-#   (then register in .claude/settings.json hooks.PostToolUse[*].hooks[]
-#    with matcher "Edit|Write|MultiEdit")
+# Safe defaults — every formatter is OPTIONAL:
+#   .py                                       → `ruff format` if installed
+#   .js/.jsx/.ts/.tsx/.json/.md/.yaml/.yml    → `prettier --write` if installed
+#   .sh/.bash                                 → `shfmt -w` if installed
+#   anything else                             → untouched
 #
-# Default behavior: format .py files via `ruff format` (if installed).
-# Extend the case statements below for other languages.
+# If a formatter is not installed for a given extension, the hook is
+# a silent no-op for that file. If you want to disable formatting
+# entirely, remove this hook from .claude/settings.json
+# hooks.PostToolUse.
 #
-# This is the first PRODUCTIVE hook (vs the defensive PreToolUse
+# This is the only PRODUCTIVE hook (vs the defensive PreToolUse
 # gates). It mutates the file after the tool call to keep style
 # consistent. Always exits 0 — productivity should never block.
 set -uo pipefail

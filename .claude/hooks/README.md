@@ -11,6 +11,7 @@ allow / exit 2 = block. Stderr is fed back to Claude on block.
 | `session-start-decay-check.sh` | `SessionStart` | **Dual job**: (a) stderr warnings on stale `CURRENT.md` (>24h), stale `.agent/status/<slice>.md` (>7d), and `project_*` memory leak regressions. (b) stdout JSON `hookSpecificOutput.additionalContext` injecting the live workspace bootstrap (CURRENT.md frontmatter + detected skills + enabled gates + productive-hook presence + memory policy) into the session context. Non-blocking. |
 | `pre-bash-destructive-gate.sh` | `PreToolUse` (Bash) | Block `rm -rf` on shared / harness dirs, `git push --force`, `git reset --hard origin/...`, `git branch -D`. Fail-closed if `jq` is missing. |
 | `pre-compact-inject.sh` | `PreCompact` | Emit the current `CURRENT.md` content so workspace state survives context compaction. Non-blocking. |
+| `post-edit-format.sh` | `PostToolUse` (Edit\|Write\|MultiEdit) | **Productive** (not defensive): auto-format the touched file via `ruff format` / `prettier --write` / `shfmt -w` based on extension. Every formatter is optional — silent no-op if not installed. Always exit 0. |
 | `stop-handoff-check.sh` | `Stop` | Validate `.agent/handoffs/CURRENT.md` yaml frontmatter against schema_version 1 (stdlib-only fallback if PyYAML missing). Compares CURRENT.md `version` against last snapshot to detect "agent forgot to /handoff". Non-blocking. |
 
 Registered in `../settings.json`.
@@ -28,7 +29,6 @@ Under `optional/`. Copy to this directory and add to
 |---|---|---|
 | `optional/pre-bash-slurm-gate.sh` | `PreToolUse` (Bash) | Block `sbatch` submission unless a contract under `.agent/contracts/` was modified in the last 7 days. For HPC users. |
 | `optional/pre-bash-db-gate.sh` | `PreToolUse` (Bash) | Block `psql ... DROP TABLE / TRUNCATE / ALTER TABLE`. For PostgreSQL users. |
-| `optional/post-edit-format.sh` | `PostToolUse` (Edit\|Write\|MultiEdit) | Auto-format files after edit. Ships with `ruff format` for Python, prettier for JS/TS/JSON/MD/YAML, shfmt for shell — runs only if the formatter is installed. Always exit 0 (productive, never blocks). |
 
 ## Matching policy (all blocking hooks)
 
