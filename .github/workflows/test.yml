@@ -73,3 +73,12 @@ jobs:
           ./scripts/init-slice.sh ci-slice
           test -f .agent/status/ci-slice.md
           test -f .agent/projects/ci-slice-harness.md
+
+      - name: Smoke-test new-skill.sh
+        run: |
+          for cat in process expertise workflow; do
+            ./scripts/new-skill.sh "ci-${cat}-skill" "${cat}"
+            test -f ".claude/skills/ci-${cat}-skill/SKILL.md"
+          done
+          # The 3 scaffolds must pass the lint as-is (with placeholders).
+          bash tests/run-skill-lint.sh
