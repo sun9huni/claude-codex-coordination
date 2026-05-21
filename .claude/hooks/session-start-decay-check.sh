@@ -145,7 +145,7 @@ ${remaining_block:-  (none recorded)}
 
 Session-start ritual (every session, in order):
   1. Re-read .agent/handoffs/CURRENT.md (yaml frontmatter + markdown body).
-  2. Identify active_slice; read .agent/status/<slice>.md, or run the project's status helper if static is stale.
+  2. Identify active_slice; read .agent/status/<slice>.md, or run the project status helper if static is stale.
   3. Drill down to .agent/projects/<slice>-harness.md only if needed.
   If owner_agent ≠ you, follow .agent/handoffs/takeover-prompt.md steps 4-7.
 
