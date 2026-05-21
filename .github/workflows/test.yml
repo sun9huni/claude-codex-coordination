@@ -53,6 +53,9 @@ jobs:
       - name: Run hook tests
         run: bash tests/run-hook-tests.sh
 
+      - name: Run skill lint
+        run: bash tests/run-skill-lint.sh
+
       - name: Smoke-test handoff.sh
         run: |
           git config user.email "ci@test"

@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: Review the current change set (uncommitted diff by default, or a specific file / PR / commit-range) through five lenses — correctness, design, simplicity, surgicality, testability — plus Karpathy's four behavioral guardrails. Produces a prioritized, opinionated review with concrete suggested edits, not vague "consider X" hedging. Use before /handoff for any non-trivial change, before opening a PR, or when reviewing someone else's branch.
+description: Review the current change set (uncommitted diff by default, or a specific file / PR#) through five lenses — correctness, design, simplicity, surgicality, testability — plus Karpathy's four guardrails. Produces a prioritized review with concrete suggested edits, not vague "consider X" hedging. Use before /handoff on any non-trivial change, or before opening a PR.
 argument-hint: "[file-path | <commit>..<commit> | PR# | (empty = uncommitted diff)]"
 allowed-tools: Read Grep Bash(git status:*) Bash(git diff:*) Bash(git log:*) Bash(git show:*) Bash(gh pr view:*) Bash(gh pr diff:*) Bash(grep:*) Bash(find:*) Bash(wc:*)
 ---

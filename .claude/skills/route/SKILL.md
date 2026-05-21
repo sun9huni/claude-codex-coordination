@@ -46,3 +46,10 @@ run `/slice-status <slice>` for the consolidated view."
 | "User typed a slice name directly — I'll just use it." | Verify it's in §1. A misspelling or stale alias should be caught here, not 5 turns later when the Stop hook rejects `active_slice`. |
 | "Empty `$ARGUMENTS` — I'll infer from the open files / cwd." | Ask the user explicitly. Inference from incidental context is exactly the silent-routing failure mode. |
 | "I'll embed a copy of the routing table in this skill body." | The table lives in `WORKFLOW.md §1` — read it at invocation time. An embedded copy goes stale silently. |
+
+## Forbidden
+
+- Do NOT invent a slice when no row matches. Tell the user to add a routing row first.
+- Do NOT fuzzy-match slice names. The §1 table is authoritative.
+- Do NOT embed a copy of the routing table in this skill — read it at invocation time.
+- Do NOT proceed to load `.agent/projects/<slice>-harness.md` content automatically; just point at the file path.

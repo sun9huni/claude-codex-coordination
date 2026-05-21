@@ -54,3 +54,10 @@ empty (fresh template), tell the user to fill it in first.
 | "Multiple slices apply to this work — show all." | A consolidated view of two slices is two reports glued together; it hides what matters in each. Pick one; run the skill twice if you really need both. |
 | "Static and live disagree, but live is probably wrong." | The disagreement IS the signal. Prefer live; flag the contradiction so the static gets refreshed. Suppressing it loses information. |
 | "Slice name is close enough — a typo'd variant should resolve." | No fuzzy match. The `WORKFLOW.md §1` table is authoritative; if `$ARGUMENTS` isn't a row, stop and ask. Silently coercing breaks `/route` and the Stop hook's VALID_SLICES check. |
+
+## Forbidden
+
+- Do NOT fuzzy-match slice names; require exact match against `WORKFLOW.md §1`.
+- Do NOT suppress disagreement between static and live sources; flag it.
+- Do NOT consolidate two slices' views into one report.
+- Do NOT modify the static `.agent/status/<slice>.md` from this skill; that belongs to `/handoff` or the slice owner.

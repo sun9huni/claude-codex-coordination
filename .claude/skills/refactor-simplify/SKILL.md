@@ -1,6 +1,6 @@
 ---
 name: refactor-simplify
-description: Find simplification opportunities in existing code — dead code, duplicate blocks, premature abstractions, over-defensive guards, wrong primitives. Default bias is DELETE / INLINE / RENAME, not ADD. Produces a prioritized list of concrete refactors with a delete-line estimate per item. Use proactively on a file or directory; do NOT use mid-feature (mixing simplification with feature work violates Surgical Changes).
+description: Find simplification opportunities in existing code — dead code, duplicates, premature abstractions, over-defensive guards, wrong primitives. Bias is DELETE / INLINE / RENAME, never ADD. Produces a prioritized list with delete-line estimate per item. Use proactively on a file or directory; never mid-feature (mixing with feature work violates Surgical Changes).
 argument-hint: "<file-path | directory>"
 allowed-tools: Read Grep Bash(grep:*) Bash(find:*) Bash(wc:*) Bash(awk:*) Bash(git log:*) Bash(git blame:*)
 ---
@@ -105,6 +105,18 @@ on:
 
 Research code's job is to be discarded once the experiment is done.
 Polishing it before it has earned its stable status is wasted work.
+
+## Red Flags
+
+| Rationalization | Reality |
+|---|---|
+| "This refactor will make future changes easier." | YAGNI. Refactor in response to a *second* concrete need, not a hypothetical one. |
+| "It's a small style improvement — counts as refactor." | If `post-edit-format.sh` would fix it, it's not a refactor; it's noise. |
+| "Net +5 lines, but the new abstraction is cleaner." | Refactor is *delete*. Net-positive line counts get demoted to Notes, not Propose. |
+| "I'll add tests as part of the refactor." | Tests land in a *separate* commit *before* the refactor, so they verify the refactor didn't regress. |
+| "Bundle the rename with the bug fix — one PR." | Two PRs. Bundling violates Surgical Changes and makes reviews lie about what changed. |
+| "The function is 50 lines but the logic is simple — leave it." | 50 lines hides bugs in eye-track. Extract or flatten with early returns; size is not "simple". |
+| "Naming is fine, just unconventional." | Unconventional names mislead readers. Rename if a future reader will mis-predict behavior; tolerate if just stylistic. |
 
 ## Forbidden
 
