@@ -10,13 +10,14 @@ This is the **same** 3-step ritual that `CLAUDE.md` and
 `.agent/handoffs/takeover-prompt.md` (steps 1-3) use. If you ever
 see them in different orders, those files are out of sync — fix them.
 
-1. **Read `.agent/handoffs/CURRENT.md`** — cross-agent SSOT. Trust
-   this, not chat history. If `owner_agent` ≠ you, follow
-   `takeover-prompt.md` steps 4-7 in addition.
-2. **Identify the active slice**. If `CURRENT.md.active_slice` is
-   set, use it. Otherwise consult §1 routing table below. Then read
-   `.agent/status/<slice>.md`; if mtime > 7 days, prefer the live
-   scan.
+1. **Read the `.agent/handoffs/CURRENT.md` index** — the derived view
+   of which session owns which slice. Trust the per-slice status
+   files, not chat history. If the slice shows a different
+   `owner_agent`, follow `takeover-prompt.md` steps 4-7.
+2. **Identify your slice and read its `.agent/status/<slice>.md`
+   baton** (owner_session, heartbeat, remaining_actions). Find it from
+   the index, or consult §1 routing table below. If mtime > 7 days,
+   prefer the live scan `./scripts/status.sh <slice>`.
 3. **Drill down only if the task needs more context** —
    `.agent/projects/<slice>-harness.md`. Do NOT pre-read all of them;
    pull on demand.
@@ -72,9 +73,10 @@ The destructive ones are auto-blocked by
 
 - Verification gate: slice-specific check + workspace
   `scripts/verify.sh` (you provide).
-- Handoff: `./scripts/handoff.sh <next-agent>` + fill in
-  `CURRENT.md` (use `/handoff` to be guided). No `<placeholder>`
-  fields.
+- Handoff: `./scripts/handoff.sh <next-agent> <slice>` claims +
+  refreshes that slice's baton frontmatter, then
+  `./scripts/status.sh index` regenerates the derived `CURRENT.md`
+  index (never hand-edit CURRENT.md). Use `/handoff` to be guided.
 - **Status refresh**: whichever slice you worked on, overwrite its
   `.agent/status/<slice>.md` with the current snapshot. Keep under
   ~25 lines.

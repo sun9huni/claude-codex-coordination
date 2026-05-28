@@ -2,6 +2,62 @@
 
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.0] - 2026-05-27
+
+Per-slice handoff model — concurrent-safe coordination for multiple
+agent sessions sharing one `.agent/` tree. Previously a single
+hand-edited `CURRENT.md` was the cross-agent SSOT; two sessions
+working different slices would clobber each other's `remaining_actions`
+on handoff. The authoritative baton is now per-slice, and `CURRENT.md`
+becomes a derived index. The plain no-slice `handoff.sh <agent>` mode
+is preserved for backward compatibility.
+
+### Added
+- `scripts/status.sh` — read-only slice status with a derived-index
+  mode. `status.sh index` regenerates `.agent/handoffs/CURRENT.md`
+  from the per-slice `status/*.md` frontmatter (one table row per
+  slice + a per-slice `remaining_actions` section, with a hard
+  anti-leak guarantee that a slice's actions appear only under that
+  slice). Atomic write (`.tmp` + `mv`); zero status files is a hard
+  error that does not clobber an existing `CURRENT.md`. No-arg lists
+  discovered slices; `<slice>` summarizes one. No hardcoded slice
+  names — slices are discovered from `status/*.md`.
+- Per-slice baton frontmatter in `.agent/status/<slice>.md`:
+  `owner_session` (UUID), `owner_label`, `owner_agent`, `version`,
+  `last_updated`, `heartbeat`, `remaining_actions`, `contract_pointers`.
+  Schema documented in `.agent/status/README.md`.
+- `tests/run-harness-concurrency.sh` — 5-assertion concurrency
+  regression test (lost-update, index regen, claim warning, no
+  cross-slice leak, per-slice Stop validation), hermetic via a sandbox
+  repo + `AGENT_ROOT`. Wired into the CI matrix.
+- `AGENT_ROOT` env seam across `handoff.sh`, `status.sh`, and both
+  hooks — points all `.agent` reads/writes at an alternate tree
+  (used by the concurrency test for isolation; default = the repo's
+  own `.agent`).
+
+### Changed
+- `scripts/handoff.sh` gained a per-slice mode: `handoff.sh <agent>
+  <slice>` claims and refreshes ONLY `status/<slice>.md` (owner fields
+  + heartbeat + version bump), preserving its `remaining_actions` /
+  `contract_pointers` / body verbatim, and leaves `CURRENT.md` alone.
+  The no-slice mode (git-snapshot writer) is unchanged.
+- `.claude/hooks/session-start-decay-check.sh` — adds a live-claim
+  check: when entering a slice (`ENTERING_SLICE`) whose heartbeat is
+  fresh (<30 min) under a different `owner_session`, it warns about the
+  contested slice. Bootstrap now sources active state from the
+  per-slice frontmatter instead of a single `active_slice` scalar.
+- `.claude/hooks/stop-handoff-check.sh` — validates the per-slice
+  `status/<slice>.md` frontmatter (required fields, `owner_agent` ∈
+  the valid set, ISO `last_updated`, unfilled `<...>` placeholder
+  scan) instead of `CURRENT.md`'s `active_slice` scalar; tolerates a
+  derived `CURRENT.md` with no top-level `version`.
+- Ritual docs (`CLAUDE.md`, `WORKFLOW.md`,
+  `.agent/handoffs/{handoff,takeover-prompt,README}.md`,
+  `.agent/status/README.md`, `HARNESS_USAGE.md`) rewritten to the
+  per-slice baton model: `status/<slice>.md` is authoritative,
+  `CURRENT.md` is the derived index (never hand-edited), handoff is
+  `handoff.sh <agent> <slice>` + `status.sh index`.
+
 ## [0.3.1] - 2026-05-21
 
 ### Added

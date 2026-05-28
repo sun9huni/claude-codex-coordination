@@ -13,29 +13,33 @@ Hand off when any of these is true:
 - Long-running job (HPC, training, batch) needs to outlive the
   current chat.
 
-## Required CURRENT.md frontmatter
+## Required per-slice baton frontmatter (`.agent/status/<slice>.md`)
 
 ```yaml
 ---
+owner_session: <auto UUID, set by handoff.sh>
+owner_label: <optional, e.g. dev-a — may be empty>
 owner_agent: <claude|codex|cursor|human>
-last_updated: <today, ISO date — e.g. 2026-05-20>
-active_slice: <slice-name from WORKFLOW.md §1>
+version: <integer, bumped by handoff.sh>
+last_updated: <today, ISO date>
+heartbeat: <ISO timestamp, set by handoff.sh>
 remaining_actions:                  # 1-3 items
   - "first concrete next step"
   - "..."
-schema_version: 1
-version: <integer, bumped by handoff.sh on every snapshot>
+contract_pointers:
+  - .agent/contracts/<slice>-<topic>-<YYYYMMDD>.md
 ---
 ```
 
 Optional but recommended: `session_title`, `files_touched_count`,
 `verification_run`, `verification_result`, `failure_log`,
-`prior_slice_archive`, `approval_required`, `contract_pointers`.
+`prior_slice_archive`, `approval_required`.
 
-The `version` field is managed by `./scripts/handoff.sh` — you do
-not edit it by hand. It increments on every successful handoff
-snapshot and is used by the Stop hook to detect "agent did not run
-/handoff this session".
+The `version`, `owner_session`, and `heartbeat` fields are managed by
+`./scripts/handoff.sh <agent> <slice>` — you do not edit them by hand.
+`version` increments on every successful claim and is used by the Stop
+hook to detect "agent did not run /handoff this session"; `heartbeat`
+and `owner_session` record who currently owns the slice.
 
 ## Required Markdown body sections
 
@@ -51,17 +55,23 @@ snapshot and is used by the Stop hook to detect "agent did not run
 - Uncommitted destructive ops left dangling (rm -rf, db drops).
 - Background jobs you cannot point at by PID, job ID, or log path.
 - "See chat above" — chat is not durable. Inline what matters.
-- Empty `<...>` placeholders in CURRENT.md.
+- Empty `<...>` placeholders in your `status/<slice>.md` baton.
 
-## After CURRENT.md is updated
+## After your slice baton is updated
 
-Run:
+Run, in order:
 
 ```bash
-./scripts/handoff.sh <next-agent>
+./scripts/handoff.sh <next-agent> <slice>   # refreshes the slice baton frontmatter
+./scripts/status.sh index                   # regenerates the derived CURRENT.md index
 ```
 
-This writes:
+The first command claims the slice and refreshes its
+`status/<slice>.md` frontmatter (owner/heartbeat/version). The second
+regenerates the derived `CURRENT.md` index — never hand-edited.
+
+The git-snapshot files below are written by the plain no-slice mode
+(`./scripts/handoff.sh <agent>`, no slice argument):
 
 - `.agent/handoffs/state/git-status.txt`
 - `.agent/handoffs/state/git-log.txt`
@@ -70,8 +80,8 @@ This writes:
 - `.agent/handoffs/state/session-note.md`  (if missing)
 - `.agent/handoffs/state/meta.txt`
 
-It also prints a stale-placeholder warning if any `<...>` remain in
-CURRENT.md.
+The Stop hook flags any `<...>` placeholder left in your
+`status/<slice>.md` baton frontmatter on the way out.
 
 ## Archive policy
 

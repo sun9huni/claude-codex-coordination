@@ -56,6 +56,9 @@ jobs:
       - name: Run skill lint
         run: bash tests/run-skill-lint.sh
 
+      - name: Run harness concurrency test
+        run: bash tests/run-harness-concurrency.sh
+
       - name: Smoke-test handoff.sh
         run: |
           git config user.email "ci@test"
