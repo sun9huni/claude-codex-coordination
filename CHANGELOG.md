@@ -2,6 +2,47 @@
 
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.1] - 2026-05-29
+
+Lifecycle hotfix on top of the v0.4.0 per-slice baton model. Adds a
+terminal `released` state, an end-of-session safety net for sessions
+that forget to `/handoff`, and an auto-commit convenience for
+contract/plan artifacts. All v0.4.0 behavior preserved.
+
+### Added
+- `state` field in per-slice baton frontmatter
+  (`active | closed | released`; default `active`). Distinguishes
+  active work from intentionally archived (`closed`) or completed-and-
+  handed-back (`released`) slices.
+- `handoff.sh --release <slice>` verb — terminal handoff that clears
+  `owner_session` / `owner_label` / `heartbeat` and sets
+  `state: released`, preserving `remaining_actions`,
+  `contract_pointers`, and body verbatim. Use when a slice's work is
+  done and ownership should return to the pool.
+- Auto-commit on handoff: untracked
+  `.agent/contracts/<slice>-*.md` and `.agent/plans/<slice>-*.md`
+  files matching the slice are auto-committed when the working tree
+  is otherwise clean. Pass `--no-auto-commit` to opt out.
+- Per-session marker written by the SessionStart hook (Job 1c) at
+  `$AGENT_DIR/handoffs/state/session-markers/<session_id>.start`.
+  The Stop hook compares per-slice baton `heartbeat` epochs against
+  this marker to detect sessions that ended without running
+  `handoff.sh` for a slice they owned.
+- `tests/run-harness-lifecycle.sh` — 4-assertion regression test
+  (state default, `--release` semantics, auto-commit, missed-handoff
+  detection), hermetic via a sandbox repo + `AGENT_ROOT`. Wired into
+  the CI matrix.
+
+### Changed
+- `.claude/hooks/stop-handoff-check.sh` now warns when a session ends
+  without running `handoff.sh` for a slice it owns (per-slice baton
+  `heartbeat` older than the session marker epoch).
+- Stop hook validates the `state` field against the closed enum
+  `{active, closed, released}`; unknown values are a schema error.
+- `scripts/status.sh index` renders a `state` column with distinct
+  rendering for `🔒 closed` and `📦 released`, so released slices
+  are visually distinguishable from active claims.
+
 ## [0.4.0] - 2026-05-27
 
 Per-slice handoff model — concurrent-safe coordination for multiple
