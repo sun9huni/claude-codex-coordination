@@ -59,6 +59,9 @@ jobs:
       - name: Run harness concurrency test
         run: bash tests/run-harness-concurrency.sh
 
+      - name: Run harness lifecycle test
+        run: bash tests/run-harness-lifecycle.sh
+
       - name: Smoke-test handoff.sh
         run: |
           git config user.email "ci@test"
