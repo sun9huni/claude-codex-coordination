@@ -120,13 +120,18 @@ fi
 # handoff.sh". Silent on empty/non-JSON stdin (manual hook invocation, tests).
 session_id=""
 if [ ! -t 0 ]; then
-    # stdin is connected to a pipe/file — try to read JSON.
-    session_id=$(python3 -c 'import json,sys
-try:
-    d = json.load(sys.stdin)
-    print(d.get("session_id",""))
-except Exception:
-    pass' 2>/dev/null || echo "")
+    # stdin is connected to a pipe/file — try to read JSON. Use select with
+    # a tiny timeout so the hook never blocks waiting for EOF on a connected-
+    # but-empty stdin (e.g. when invoked from a parent shell that inherits
+    # its own non-terminal stdin without piping anything in — common in
+    # `bash test.sh` invocations and CI runners).
+    session_id=$(python3 -c 'import json, select, sys
+if select.select([sys.stdin], [], [], 0.05)[0]:
+    try:
+        d = json.load(sys.stdin)
+        print(d.get("session_id", ""))
+    except Exception:
+        pass' 2>/dev/null || echo "")
 fi
 if [ -n "$session_id" ]; then
     markers_dir="$AGENT_DIR/handoffs/state/session-markers"

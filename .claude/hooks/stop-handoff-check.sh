@@ -252,12 +252,15 @@ fi
 # ending without /handoff having been run for that slice.
 session_id=""
 if [ ! -t 0 ]; then
-    session_id=$(python3 -c 'import json,sys
-try:
-    d = json.load(sys.stdin)
-    print(d.get("session_id",""))
-except Exception:
-    pass' 2>/dev/null || echo "")
+    # select with a tiny timeout so we never block waiting for EOF on a
+    # connected-but-empty stdin (see session-start-decay-check.sh Job 1c).
+    session_id=$(python3 -c 'import json, select, sys
+if select.select([sys.stdin], [], [], 0.05)[0]:
+    try:
+        d = json.load(sys.stdin)
+        print(d.get("session_id", ""))
+    except Exception:
+        pass' 2>/dev/null || echo "")
 fi
 
 if [ -n "$session_id" ]; then
