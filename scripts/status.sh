@@ -235,6 +235,7 @@ for path in sorted(files):
             "version": scalar(fm.get("version")),
             "last_updated": scalar(fm.get("last_updated")),
             "heartbeat": scalar(fm.get("heartbeat")),
+            "state": scalar(fm.get("state")) or "active",
             "remaining_actions": as_list(fm.get("remaining_actions")),
             "contract_pointers": as_list(fm.get("contract_pointers")),
         }
@@ -254,8 +255,8 @@ out.append(
     "status file; do not hand-edit (see `.agent/status/README.md`)."
 )
 out.append("")
-out.append("| slice | owner | agent | last_updated | heartbeat | next action |")
-out.append("|---|---|---|---|---|---|")
+out.append("| slice | owner | agent | state | last_updated | heartbeat | next action |")
+out.append("|---|---|---|---|---|---|---|")
 
 for s in slices:
     sess = s["owner_session"]
@@ -283,12 +284,23 @@ for s in slices:
     actions = s["remaining_actions"]
     next_action = truncate(actions[0]) if actions else "—"
 
+    state = s["state"]
+    if state == "active":
+        state_cell = "active"
+    elif state == "closed":
+        state_cell = "🔒 closed"
+    elif state == "released":
+        state_cell = "📦 released"
+    else:
+        state_cell = state
+
     out.append(
-        "| %s | %s | %s | %s | %s | %s |"
+        "| %s | %s | %s | %s | %s | %s | %s |"
         % (
             s["slice"],
             owner_cell,
             s["owner_agent"] or "—",
+            state_cell,
             s["last_updated"] or "—",
             hb_cell,
             next_action,
@@ -302,7 +314,16 @@ out.append("")
 for s in slices:
     sess = s["owner_session"]
     owner_note = sess if sess else "unclaimed"
-    out.append("### %s" % s["slice"])
+    state = s["state"]
+    if state == "active":
+        state_header = "active"
+    elif state == "closed":
+        state_header = "🔒 closed"
+    elif state == "released":
+        state_header = "📦 released"
+    else:
+        state_header = state
+    out.append("### %s — %s" % (s["slice"], state_header))
     out.append("")
     out.append("- owner_session: %s" % owner_note)
     if s["owner_label"]:
