@@ -168,6 +168,11 @@ for k in REQUIRED:
 if "owner_agent" in fm and str(fm["owner_agent"]).strip() not in VALID_AGENTS:
     errs.append(f"owner_agent must be one of {sorted(VALID_AGENTS)} (got: {fm['owner_agent']!r})")
 
+if "state" in fm:
+    s = str(fm["state"]).strip()
+    if s and s not in {"active", "closed", "released"}:
+        errs.append(f"state must be one of [active, closed, released] (got: {s!r})")
+
 if "remaining_actions" in fm:
     ra = fm["remaining_actions"]
     if not isinstance(ra, list):
@@ -212,6 +217,13 @@ fm_scalar() {
     ' "$1" 2>/dev/null
 }
 
+# Parse an ISO-8601 UTC timestamp to epoch seconds (GNU date -> python3).
+iso_to_epoch() {
+    date -u -d "$1" +%s 2>/dev/null \
+        || python3 -c "import datetime,sys; print(int(datetime.datetime.strptime(sys.argv[1],'%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=datetime.timezone.utc).timestamp()))" "$1" 2>/dev/null \
+        || echo ""
+}
+
 if [ -n "${ENTERING_SLICE:-}" ]; then
     slice_file="$status_dir/$ENTERING_SLICE.md"
     if [ -f "$slice_file" ]; then
@@ -232,6 +244,51 @@ elif [ -d "$status_dir" ]; then
         [ -n "$owner" ] || continue
         validate_slice "$slice_file"
     done
+fi
+
+# ── Missed-handoff check (v0.4.1) ─────────────────────────────────────────────
+# If the SessionStart hook wrote a session marker for this session_id, and any
+# claimed slice's heartbeat predates the session start, warn — the session is
+# ending without /handoff having been run for that slice.
+session_id=""
+if [ ! -t 0 ]; then
+    session_id=$(python3 -c 'import json,sys
+try:
+    d = json.load(sys.stdin)
+    print(d.get("session_id",""))
+except Exception:
+    pass' 2>/dev/null || echo "")
+fi
+
+if [ -n "$session_id" ]; then
+    marker_file="$AGENT_DIR/handoffs/state/session-markers/$session_id.start"
+    if [ -f "$marker_file" ]; then
+        session_start=$(head -1 "$marker_file" 2>/dev/null | tr -d '[:space:]')
+        if [ -n "$session_start" ] && [ -d "$status_dir" ]; then
+            cur_sess="${OWNER_SESSION:-}"
+            for sf in "$status_dir"/*.md; do
+                [ -f "$sf" ] || continue
+                [ "$(basename "$sf")" = "README.md" ] && continue
+                s_owner=$(fm_scalar "$sf" owner_session)
+                [ -n "$s_owner" ] || continue
+                # If we know our own session, only warn for slices we own.
+                # Otherwise warn for any claimed slice with heartbeat older than
+                # session start (less precise, but still useful).
+                if [ -n "$cur_sess" ] && [ "$s_owner" != "$cur_sess" ]; then
+                    continue
+                fi
+                s_hb=$(fm_scalar "$sf" heartbeat)
+                [ -n "$s_hb" ] || continue
+                hb_epoch=$(iso_to_epoch "$s_hb")
+                [ -n "$hb_epoch" ] || continue
+                if [ "$hb_epoch" -lt "$session_start" ]; then
+                    age_m=$(( (session_start - hb_epoch) / 60 ))
+                    slice_name=$(basename "$sf" .md)
+                    printf "[handoff-check] session ended without running handoff.sh for slice '%s' (heartbeat %dm before session start)\n" "$slice_name" "$age_m" >&2
+                fi
+            done
+        fi
+    fi
 fi
 
 exit 0
