@@ -211,6 +211,35 @@ slice_auto_commit() {
   echo "[handoff] auto-committed: ${matches[*]}"
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# refresh_derived_views: keep the DERIVED index (CURRENT.md) fresh and surface
+# baton<->reality drift. Called at the end of BOTH the claim and release paths.
+#
+# Staleness root cause: batons get updated but CURRENT.md (and any view derived
+# from it) lags because nobody re-ran `status.sh index`. Regenerating here makes
+# every /handoff refresh the index — and pick up new slices — then flags drift
+# (e.g. a job the baton still calls RUNNING that the scheduler has finished).
+# status.sh takes no lock, so this is safe to call while handoff holds OWNER.lock.
+# Pure/read-only, best-effort — it can NEVER fail the handoff.
+# ─────────────────────────────────────────────────────────────────────────────
+refresh_derived_views() {
+  if [ -f "$ROOT/scripts/status.sh" ]; then
+    if bash "$ROOT/scripts/status.sh" index >/dev/null 2>&1; then
+      echo "[handoff] CURRENT.md index regenerated"
+    else
+      echo "[handoff] warning: index regen failed — run ./scripts/status.sh index" >&2
+    fi
+  fi
+  if [ -x "$ROOT/scripts/baton-drift.sh" ]; then
+    local _drift
+    _drift="$(bash "$ROOT/scripts/baton-drift.sh" 2>/dev/null || true)"
+    if [ -n "$_drift" ]; then
+      echo "[handoff] ⚠️ baton-drift — fix before the next agent trusts these:" >&2
+      printf '%s\n' "$_drift" | sed 's/^/    /' >&2
+    fi
+  fi
+}
+
 # CURRENT.md is required only in no-slice mode (it is the live single-session
 # SSOT we bump + snapshot against). In slice mode CURRENT.md is a derived
 # index produced later by status.sh, so we do not require it here.
@@ -314,6 +343,7 @@ if [ "$RELEASE_MODE" -eq 1 ]; then
   echo "[handoff] released slice=$SLICE version: $cur_v -> $new_v"
   echo "[handoff] wrote: $slice_file"
   slice_auto_commit
+  refresh_derived_views
   echo "[handoff] done"
   exit 0
 fi
@@ -428,6 +458,7 @@ if [ -n "$SLICE" ]; then
   echo "[handoff] slice=$SLICE owner_session=$owner_session version: $cur_v -> $new_v heartbeat=$hb_iso"
   echo "[handoff] wrote: $slice_file"
   slice_auto_commit
+  refresh_derived_views
   echo "[handoff] done"
   exit 0
 fi

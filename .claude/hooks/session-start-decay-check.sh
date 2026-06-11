@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# SessionStart hook: two jobs.
+# SessionStart hook: three jobs.
+#
+# Job 0 — freshness (non-blocking): regenerate the derived CURRENT.md index
+#   from the slice files (so Jobs 1 & 2 reflect the latest batons) and surface
+#   baton<->reality drift. Skipped under the AGENT_ROOT test seam.
 #
 # Job 1 — stderr WARNINGS (non-blocking):
 #   stale CURRENT.md (>24h), stale .agent/status/<slice>.md (>7d),
@@ -25,6 +29,26 @@ file_mtime() {
         || python3 -c "import os,sys; print(int(os.path.getmtime(sys.argv[1])))" "$1" 2>/dev/null \
         || echo ""
 }
+
+# ---------- Job 0: freshness (root-cause fix) ----------
+# The derived index (CURRENT.md) only refreshes when someone runs
+# `status.sh index`. Sessions that edited batons but skipped that left the
+# index — and any view derived from it — frozen (e.g. a slice showing a job
+# RUNNING days after it finished). So regenerate the index from the slice files
+# FIRST, so the bootstrap + staleness checks below reflect the latest batons,
+# then surface baton<->reality drift to stderr. Pure/read-only, best-effort,
+# never blocks. Skip the mutation under the AGENT_ROOT test seam.
+if [ -z "${AGENT_ROOT:-}" ]; then
+    if [ -f "$ROOT/scripts/status.sh" ]; then
+        bash "$ROOT/scripts/status.sh" index >/dev/null 2>&1 || true
+    fi
+    if [ -x "$ROOT/scripts/baton-drift.sh" ]; then
+        _drift="$(bash "$ROOT/scripts/baton-drift.sh" 2>/dev/null || true)"
+        if [ -n "$_drift" ]; then
+            printf '[baton-drift] %s\n' "$_drift" >&2
+        fi
+    fi
+fi
 
 # ---------- Job 1: decay warnings (stderr) ----------
 now=$(date +%s)

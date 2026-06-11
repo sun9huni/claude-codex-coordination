@@ -1,26 +1,50 @@
 #!/usr/bin/env bash
-# PreCompact hook: ensure CURRENT.md content survives context compaction.
+# PreCompact hook: carry FRESH workspace state through context compaction.
 #
-# When Claude Code compacts a long conversation, summarized context
-# loses fine-grained references to the workspace state. By printing
-# the CURRENT.md frontmatter + body to stdout here, the compactor sees
-# this content as part of the "before-compaction" record and keeps it
-# proximate in the summarized form. Non-blocking (exit 0).
+# When Claude Code compacts a long conversation, summarized context loses
+# fine-grained references to the workspace state. Printing the CURRENT.md
+# frontmatter + body to stdout here keeps that content proximate in the
+# summarized form.
 #
-# This hook does NOT block compaction. To block compaction, return a
-# JSON `{"decision": "block", "reason": "..."}` on stdout instead.
+# Root-cause note: the derived index (CURRENT.md) only refreshes when someone
+# runs `status.sh index`. If a long session edited batons but never regenerated
+# it, a plain `cat CURRENT.md` would inject STALE state into the compacted
+# context. So we (1) regenerate the index first (a pure transform from the
+# slice files), (2) inject the now-fresh CURRENT.md, and (3) append any
+# baton<->reality drift so the post-compaction agent fixes the batons instead
+# of trusting a frozen snapshot.
+#
+# Non-blocking (exit 0). To block compaction, emit a JSON
+# `{"decision": "block", "reason": "..."}` on stdout instead.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-current="$ROOT/.agent/handoffs/CURRENT.md"
+AGENT_DIR="${AGENT_ROOT:-$ROOT/.agent}"
+current="$AGENT_DIR/handoffs/CURRENT.md"
+
+# (1) refresh the derived index before snapshotting — best-effort, never fatal.
+if [ -f "$ROOT/scripts/status.sh" ]; then
+  bash "$ROOT/scripts/status.sh" index >/dev/null 2>&1 || true
+fi
+
 [ -f "$current" ] || exit 0
 
-# Emit a tagged block so the post-compaction context can recognize it.
+# (2) emit a tagged block so the post-compaction context recognizes it.
 echo "--- PRE-COMPACT: workspace state snapshot ---"
-echo "(Source of truth: .agent/handoffs/CURRENT.md, captured before context compaction)"
+echo "(Source of truth: .agent/handoffs/CURRENT.md, regenerated immediately before compaction)"
 echo
 cat "$current"
 echo
 echo "--- END PRE-COMPACT ---"
+
+# (3) surface baton<->reality drift so the compacted agent updates the batons.
+if [ -x "$ROOT/scripts/baton-drift.sh" ]; then
+  drift="$(bash "$ROOT/scripts/baton-drift.sh" 2>/dev/null || true)"
+  if [ -n "$drift" ]; then
+    echo
+    echo "--- BATON DRIFT (the snapshot above may lag reality — fix these batons) ---"
+    printf '%s\n' "$drift"
+  fi
+fi
 
 exit 0
