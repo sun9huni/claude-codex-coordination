@@ -12,9 +12,11 @@ Three event types matter:
   call as JSON on stdin. Exit 2 blocks the call and feeds stderr
   back to Claude.
 - `Stop` — fires when the session is about to end.
+- `PreCompact` — fires before a long conversation is compacted; stdout
+  is carried into the summarized context.
 
 (There are others — `PostToolUse`, `UserPromptSubmit`,
-`SessionEnd` — but the three above cover most enforcement needs.)
+`SessionEnd` — but the events above cover most enforcement needs.)
 
 Registration is in `.claude/settings.json`:
 
@@ -37,11 +39,33 @@ Registration is in `.claude/settings.json`:
 
 | Hook | Event | Blocks? | Purpose |
 |---|---|---|---|
-| `session-start-decay-check.sh` | SessionStart | No | Warn on stale state |
+| `session-start-decay-check.sh` | SessionStart | No | Regenerate the derived index, flag baton drift, warn on stale state |
+| `pre-compact-inject.sh` | PreCompact | No | Carry the freshly-regenerated index + drift through compaction |
 | `pre-bash-destructive-gate.sh` | PreToolUse[Bash] | Yes | rm -rf on shared / harness dirs, force pushes, hard resets |
 | `stop-handoff-check.sh` | Stop | No | Validate CURRENT.md frontmatter schema |
 | `optional/pre-bash-slurm-gate.sh` | PreToolUse[Bash] | Yes | sbatch without active contract |
 | `optional/pre-bash-db-gate.sh` | PreToolUse[Bash] | Yes | psql DDL |
+
+### Freshness (auto-index + baton-drift)
+
+The derived `CURRENT.md` index only reflects the per-slice batons when
+something runs `scripts/status.sh index`. To stop it (and any view
+derived from it) from silently freezing when a session edits batons but
+forgets the manual regen, three entry points regenerate it
+automatically and surface `scripts/baton-drift.sh` findings:
+
+- `session-start-decay-check.sh` (Job 0) — regenerate before the session
+  reads state.
+- `pre-compact-inject.sh` — regenerate before snapshotting into the
+  compacted context.
+- `handoff.sh` (claim **and** `--release` paths) — regenerate on every
+  handoff.
+
+`baton-drift.sh` is read-only and best-effort: it reports a baton whose
+`heartbeat` is ≥ N days old (default 2), and — only where `sacct` is on
+PATH (bash ≥ 4) — a baton still asserting a job is RUNNING that the
+scheduler has finished. Empty output means no drift; it never exits
+non-zero, so it can never fail a handoff.
 
 ## Matching policy — the two rules
 

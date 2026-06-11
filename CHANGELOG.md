@@ -2,6 +2,42 @@
 
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.2] - 2026-06-11
+
+Auto-freshness on the per-slice baton model. The derived `CURRENT.md`
+index previously only refreshed when someone ran `scripts/status.sh
+index` by hand; a session that updated batons but skipped that step left
+the index — and any view derived from it — silently frozen. This release
+regenerates the index automatically at the points where staleness bites,
+and surfaces baton↔reality drift so the next agent fixes the baton
+instead of trusting a frozen snapshot. Additive and backward-compatible:
+the manual `status.sh index` still works unchanged.
+
+### Added
+- `scripts/baton-drift.sh` — read-only, best-effort detector of drift
+  between a per-slice baton and live reality. Reports (B) heartbeat age
+  (`heartbeat` ≥ N days old, default 2; `--stale-days N` to override) on
+  any POSIX bash, and (A) scheduler drift (a baton asserting a job is
+  RUNNING that `sacct` reports terminal) only where `sacct` is on PATH
+  and bash ≥ 4. Honors the `AGENT_ROOT` test seam. Never exits non-zero,
+  so it can never fail a caller.
+
+### Changed
+- `scripts/handoff.sh` regenerates the derived `CURRENT.md` index and
+  surfaces `baton-drift.sh` findings on **both** the claim and
+  `--release` paths (new `refresh_derived_views` helper, called while the
+  `OWNER.lock` is still held — `status.sh` takes no lock, so no deadlock).
+- `.claude/hooks/session-start-decay-check.sh` gains a "Job 0" that
+  regenerates the index and reports baton drift before the session reads
+  state. Skipped under the `AGENT_ROOT` test seam so it never mutates the
+  real repo during tests.
+- `.claude/hooks/pre-compact-inject.sh` regenerates the index before
+  snapshotting it into the compacted context, and appends any baton drift
+  to the snapshot.
+- Docs: `docs/concepts/enforcement-hooks.md` documents the `PreCompact`
+  hook + the freshness flow; `.agent/handoffs/handoff.md` notes that
+  `handoff.sh` now runs the index regen for you.
+
 ## [0.4.1] - 2026-05-29
 
 Lifecycle hotfix on top of the v0.4.0 per-slice baton model. Adds a

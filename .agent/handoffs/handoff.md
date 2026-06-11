@@ -70,6 +70,11 @@ The first command claims the slice and refreshes its
 `status/<slice>.md` frontmatter (owner/heartbeat/version). The second
 regenerates the derived `CURRENT.md` index — never hand-edited.
 
+Since v0.4.2 `handoff.sh` already runs the index regen for you (on both
+the claim and `--release` paths) and surfaces any baton drift, so the
+explicit `status.sh index` is now a belt-and-suspenders step you can
+skip when you just ran `handoff.sh`.
+
 The git-snapshot files below are written by the plain no-slice mode
 (`./scripts/handoff.sh <agent>`, no slice argument):
 
