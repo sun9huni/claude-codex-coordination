@@ -27,7 +27,11 @@ Registration is in `.claude/settings.json`:
       {
         "matcher": "Bash",
         "hooks": [
-          { "type": "command", "command": "./.claude/hooks/foo.sh" }
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/foo.sh",
+            "timeout": 10
+          }
         ]
       }
     ]
@@ -43,6 +47,7 @@ Registration is in `.claude/settings.json`:
 | `pre-compact-inject.sh` | PreCompact | No | Carry the freshly-regenerated index + drift through compaction |
 | `pre-bash-destructive-gate.sh` | PreToolUse[Bash] | Yes | rm -rf on shared / harness dirs, force pushes, hard resets |
 | `stop-handoff-check.sh` | Stop | No | Validate CURRENT.md frontmatter schema |
+| `session-end-cleanup.sh` | SessionEnd | No | Delete this session's start marker (leak prevention) |
 | `optional/pre-bash-slurm-gate.sh` | PreToolUse[Bash] | Yes | sbatch without active contract |
 | `optional/pre-bash-db-gate.sh` | PreToolUse[Bash] | Yes | psql DDL |
 
@@ -97,15 +102,22 @@ EOF
 )"
 ```
 
-The hook receives the entire command including the heredoc body. To
-avoid matching keywords in the body:
+The hook receives the entire command including the heredoc body. The
+naive fix — `cmd_check="${cmd%%<<*}"` — has a hole: it throws away
+*everything* after the first `<<`, including real commands that follow
+the heredoc, so a harmless heredoc prefix could smuggle `rm -rf /data`
+past the gate. The shipped gates instead strip only the heredoc /
+here-string *bodies* and keep scanning what follows:
 
 ```bash
-cmd_check="${cmd%%<<*}"
+cmd_check=$(python3 -c 'import re,sys; s=sys.stdin.read(); s=re.sub(r"<<-?[ \t]*\\?([\"\x27]?)(\w+)\1([^\n]*\n).*?\n\2", r" \3", s, flags=re.S); s=re.sub(r"<<<\s*(\"[^\"]*\"|\x27[^\x27]*\x27|[^\s;&|]+)", " ", s); print(s)' <<< "$cmd" 2>/dev/null) || cmd_check="$cmd"
+[ -n "$cmd_check" ] || cmd_check="$cmd"
 ```
 
-Now only the part before the first `<<` is scanned. Heredoc payloads
-(commit messages, docs, multi-line string args) are excluded.
+Heredoc payloads (commit messages, docs, multi-line string args) are
+excluded; commands *after* the heredoc are still matched. If python3 is
+missing the gate falls back to scanning the raw command — fail closed:
+body text may then false-positive (block), never false-negative.
 
 ## Writing a new blocking hook
 
@@ -116,7 +128,10 @@ set -uo pipefail
 input=$(cat)
 [ "$(jq -r '.tool_name // ""' <<< "$input")" = "Bash" ] || exit 0
 cmd=$(jq -r '.tool_input.command // ""' <<< "$input")
-cmd_check="${cmd%%<<*}"
+# Strip heredoc/here-string BODIES, keep commands that follow them
+# (see "Rule 2" above for the python3 one-liner used by the shipped
+# gates; fall back to the raw command if python3 is unavailable).
+cmd_check=$(strip_heredoc_bodies <<< "$cmd") || cmd_check="$cmd"
 
 ANCHOR='(^|[[:space:]]*\;|\&\&|\|\||\|[[:space:]]|'$'\n'')[[:space:]]*(sudo[[:space:]]+)?'
 

@@ -32,24 +32,58 @@ input=$(cat)
 [ "$(jq -r '.tool_name // ""' <<< "$input")" = "Bash" ] || exit 0
 cmd=$(jq -r '.tool_input.command // ""' <<< "$input")
 
-# Strip heredoc body — anything after `<<` is data, not commands.
-cmd_check="${cmd%%<<*}"
+# Strip heredoc and here-string BODIES — they are data, not commands —
+# while keeping any commands that follow them. (A naive ${cmd%%<<*}
+# would also throw away real commands after the first <<, so a heredoc
+# prefix could smuggle `rm -rf /data` past the gate.) Fail closed: if
+# python3 is missing or errors, scan the raw command instead.
+cmd_check=$(python3 -c 'import re,sys; s=sys.stdin.read(); s=re.sub(r"<<-?[ \t]*\\?([\"\x27]?)(\w+)\1([^\n]*\n).*?\n\2", r" \3", s, flags=re.S); s=re.sub(r"<<<\s*(\"[^\"]*\"|\x27[^\x27]*\x27|[^\s;&|]+)", " ", s); print(s)' <<< "$cmd" 2>/dev/null) || cmd_check="$cmd"
+[ -n "$cmd_check" ] || cmd_check="$cmd"
 
-# Anchor: token at start of a sub-command, optional sudo prefix.
-ANCHOR='(^|[[:space:]]*\;|\&\&|\|\||\|[[:space:]]|'$'\n'')[[:space:]]*(sudo[[:space:]]+)?'
+# Strip quote characters so quoted flags (rm "-rf") cannot dodge the
+# flag matching below. Done AFTER heredoc stripping so the quoted
+# delimiter form <<'EOF' is still recognized above.
+cmd_check=${cmd_check//\"/}
+cmd_check=${cmd_check//\'/}
+
+# Anchor: token at start of a sub-command, with optional sudo prefix
+# and/or leading VAR=value environment assignments.
+ANCHOR='(^|[[:space:]]*\;|\&\&|\|\||\|[[:space:]]|'$'\n'')[[:space:]]*((sudo[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*)'
+
+# git global options that take an argument and may precede the
+# subcommand: -C <path> (run in another dir) and -c <key>=<val>
+# (one-shot config). Without this, `git -C /repo push --force` would
+# slip past every git pattern below.
+GOPT='(-[cC][[:space:]]+[^[:space:]]+[[:space:]]+)*'
+
+# One or more flag tokens between `rm` and its first path argument,
+# covering combined (-rf) and split (-r -f) forms alike.
+RM_FLAGS='((-[a-zA-Z]+[[:space:]]+)+)'
+
+# Confirm both a recursive and a force flag appear in a matched rm
+# region. Takes the region by value: every [[ =~ ]] clobbers
+# BASH_REMATCH, so the caller cannot re-test the capture in a chain.
+rm_rf_in_region() {
+    local region="$1"
+    [[ "$region" =~ (^|[[:space:]])-[a-zA-Z]*[rR] ]] || return 1
+    [[ "$region" =~ (^|[[:space:]])-[a-zA-Z]*[fF] ]] || return 1
+    return 0
+}
 
 reason=""
 
-if [[ "$cmd_check" =~ ${ANCHOR}rm[[:space:]]+(-[rRfFvVi]*[rR][rRfFvVi]*[fF][rRfFvVi]*|-[rRfFvVi]*[fF][rRfFvVi]*[rR][rRfFvVi]*)[[:space:]]+${SHARED_PATHS_REGEX} ]]; then
+if [[ "$cmd_check" =~ ${ANCHOR}rm[[:space:]]+${RM_FLAGS}${SHARED_PATHS_REGEX} ]] \
+    && rm_rf_in_region "${BASH_REMATCH[0]}"; then
     reason="rm -rf on shared storage"
-elif [[ "$cmd_check" =~ ${ANCHOR}rm[[:space:]]+(-[rRfFvVi]*[rR][rRfFvVi]*[fF][rRfFvVi]*|-[rRfFvVi]*[fF][rRfFvVi]*[rR][rRfFvVi]*)[[:space:]]+/?\.(agent|claude|codex|git)([[:space:]]|/|$) ]]; then
+elif [[ "$cmd_check" =~ ${ANCHOR}rm[[:space:]]+${RM_FLAGS}([^[:space:]]*/)?\.(agent|claude|codex|git)([[:space:]]|/|$) ]] \
+    && rm_rf_in_region "${BASH_REMATCH[0]}"; then
     reason="rm -rf on a harness/config directory (.agent, .claude, .codex, .git)"
-elif [[ "$cmd_check" =~ ${ANCHOR}git[[:space:]]+push[[:space:]] ]] && \
-     [[ "$cmd_check" =~ ${ANCHOR}git[[:space:]]+push[[:space:]].*(--force([[:space:]]|=|$)|[[:space:]]-f([[:space:]]|$)) ]]; then
+elif [[ "$cmd_check" =~ ${ANCHOR}git[[:space:]]+${GOPT}push[[:space:]] ]] && \
+     [[ "$cmd_check" =~ ${ANCHOR}git[[:space:]]+${GOPT}push[[:space:]].*(--force([[:space:]]|=|$)|[[:space:]]-f([[:space:]]|$)) ]]; then
     reason="git push --force"
-elif [[ "$cmd_check" =~ ${ANCHOR}git[[:space:]]+reset[[:space:]]+--hard[[:space:]]+(origin|upstream)/ ]]; then
+elif [[ "$cmd_check" =~ ${ANCHOR}git[[:space:]]+${GOPT}reset[[:space:]]+--hard[[:space:]]+(origin|upstream)/ ]]; then
     reason="git reset --hard against a remote ref"
-elif [[ "$cmd_check" =~ ${ANCHOR}git[[:space:]]+branch[[:space:]]+-D([[:space:]]|$) ]]; then
+elif [[ "$cmd_check" =~ ${ANCHOR}git[[:space:]]+${GOPT}branch[[:space:]]+-D([[:space:]]|$) ]]; then
     reason="git branch -D (force delete)"
 fi
 

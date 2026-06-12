@@ -12,7 +12,8 @@ allow / exit 2 = block. Stderr is fed back to Claude on block.
 | `pre-bash-destructive-gate.sh` | `PreToolUse` (Bash) | Block `rm -rf` on shared / harness dirs, `git push --force`, `git reset --hard origin/...`, `git branch -D`. Fail-closed if `jq` is missing. |
 | `pre-compact-inject.sh` | `PreCompact` | Emit the current `CURRENT.md` content so workspace state survives context compaction. Non-blocking. |
 | `post-edit-format.sh` | `PostToolUse` (Edit\|Write\|MultiEdit) | **Productive** (not defensive): auto-format the touched file via `ruff format` / `prettier --write` / `shfmt -w` based on extension. Every formatter is optional — silent no-op if not installed. Always exit 0. |
-| `stop-handoff-check.sh` | `Stop` | Validate `.agent/handoffs/CURRENT.md` yaml frontmatter against schema_version 1 (stdlib-only fallback if PyYAML missing). Compares CURRENT.md `version` against last snapshot to detect "agent forgot to /handoff". Non-blocking. |
+| `stop-handoff-check.sh` | `Stop` | Validate claimed per-slice `.agent/status/<slice>.md` yaml frontmatter against the schema in `.agent/status/README.md` (owner_session, owner_agent, version, last_updated, heartbeat, remaining_actions; stdlib mini-parser fallback if PyYAML missing). Also warns on stale CURRENT.md mtime, on a legacy CURRENT.md `version` unchanged since the last snapshot, and on a session ending without `handoff.sh` (via the session-start marker). Non-blocking. |
+| `session-end-cleanup.sh` | `SessionEnd` | Delete this session's start marker (written by the SessionStart hook; it must survive every Stop and is removed only when the session truly ends — markers leaked by crashed sessions are swept by the >7d prune at session start). Always exit 0. |
 
 Registered in `../settings.json`.
 
@@ -35,9 +36,14 @@ Under `optional/`. Copy to this directory and add to
 - Every blocking pattern is anchored to look like a real shell command
   (start-of-string or after `;`, `&&`, `||`, `|`, newline) so keywords
   inside quoted arguments do not trip the hook.
-- Heredoc bodies are stripped before matching (`${cmd%%<<*}`) so
-  commit messages and other heredoc payloads do not cause false
-  positives.
+- Heredoc and here-string *bodies* are stripped before matching (a
+  python3 regex one-liner — see docs/concepts/enforcement-hooks.md,
+  Rule 2) so commit messages and other heredoc payloads do not cause
+  false positives, while commands *after* a heredoc are still scanned
+  (a naive `${cmd%%<<*}` would discard those too — that was the
+  pre-0.5.0 bypass). If python3 is unavailable the gates fall back to
+  matching the raw command: fail closed (may false-positive, never
+  false-negative).
 
 ## Adding a new hook
 

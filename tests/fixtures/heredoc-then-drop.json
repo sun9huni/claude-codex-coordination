@@ -1,0 +1,1 @@
+{"tool_name":"Bash","tool_input":{"command":"cat > notes.md <<EOF\ndocs\nEOF\npsql -c \"DROP TABLE runs;\""}}

@@ -7,15 +7,24 @@ survives the gap between sessions and the swap between agents.
 
 At the end of a session, the outgoing agent leaves:
 
-1. A complete `.agent/handoffs/CURRENT.md` with valid yaml
-   frontmatter and a populated markdown body.
-2. A snapshot under `.agent/handoffs/state/` (git status, diff,
-   log, optional session-note).
+1. An updated `.agent/status/<slice>.md` baton — the authoritative
+   per-slice state — with valid yaml frontmatter and a populated
+   markdown body, claimed via `./scripts/handoff.sh <agent> <slice>`
+   (or released via `--release <slice>` when the slice is done).
+2. A regenerated `.agent/handoffs/CURRENT.md` — the DERIVED lab-wide
+   index. `handoff.sh` regenerates it for you; it is never hand-edited
+   (hand-edits are silently overwritten — the SessionStart hook
+   re-runs `status.sh index` at the next session start).
+3. For lab-wide (no-slice) handoffs: a snapshot under
+   `.agent/handoffs/state/sessions/<ts>-<agent>/` (git status, diff,
+   log, optional session-note), with `state/latest` pointing at it.
 
 At the start of the next session, the incoming agent:
 
-1. Reads `CURRENT.md`.
-2. If `owner_agent ≠ self`, runs the takeover protocol
+1. Reads the `CURRENT.md` index, then its slice's
+   `.agent/status/<slice>.md` baton.
+2. If the baton's `owner_agent ≠ self` (or the heartbeat is fresh
+   under a different `owner_session`), runs the takeover protocol
    (`.agent/handoffs/takeover-prompt.md` steps 4-7).
 3. Acts.
 
@@ -23,13 +32,18 @@ That's the contract. Everything else is mechanism.
 
 ## What lives in the frontmatter vs body
 
-The frontmatter is **machine-readable**:
+The baton frontmatter is **machine-readable** (schema:
+`.agent/status/README.md`):
+- `owner_session` / `owner_label` — which live session holds the lease.
 - `owner_agent` — who finished the last session.
+- `version` — bumped by every `handoff.sh` run.
 - `last_updated` — ISO date; Stop hook warns if > 7 days.
-- `active_slice` — which slice the work belongs to.
+- `heartbeat` — ISO timestamp; fresh (≤30 min) means a live claim.
+- `state` — `active` | `closed` | `released`.
 - `remaining_actions` — list of 1-3 concrete next steps.
-- Optional metadata: `session_title`, `verification_run`,
-  `failure_log`, `approval_required`, `contract_pointers`, etc.
+- `contract_pointers` — paths into `.agent/contracts/`.
+
+(The slice itself IS the filename — there is no `active_slice` field.)
 
 The body is **human-readable**:
 - Goal in one paragraph.
@@ -39,8 +53,8 @@ The body is **human-readable**:
 - Failure log paths.
 - Memory / contract pointers.
 
-Both must stay consistent. The Stop hook validates the frontmatter
-but cannot validate the body — that's on you.
+Both must stay consistent. The Stop hook validates the frontmatter of
+every claimed baton but cannot validate the body — that's on you.
 
 ## Why yaml frontmatter
 
@@ -52,22 +66,28 @@ but cannot validate the body — that's on you.
 
 ## scripts/handoff.sh
 
-Captures the bits that depend on git state, which the agent cannot
-inline reliably:
+In slice mode (`handoff.sh <agent> <slice>`), claims/refreshes exactly
+the baton's owner/version/timestamp fields, preserves everything else
+verbatim, then regenerates the index and reports baton drift.
 
-- `state/git-status.txt` — `git status --short`.
-- `state/git-log.txt` — last 10 commits.
-- `state/diff.patch` — working tree diff.
-- `state/diff-staged.patch` — staged diff.
-- `state/meta.txt` — timestamp, agent, host.
-- `state/session-note.md` — free-form notes (created empty).
+In no-slice mode, it additionally captures the bits that depend on git
+state, which the agent cannot inline reliably:
+
+- `state/sessions/<ts>-<agent>/git-status.txt` — `git status --short`.
+- `.../git-log.txt` — last 10 commits.
+- `.../diff.patch` — working tree diff.
+- `.../diff-staged.patch` — staged diff.
+- `.../meta.txt` — timestamp, agent, host.
+- `.../session-note.md` — free-form notes (created empty).
+- `state/latest` — symlink to the newest snapshot (keeps 20).
 
 These let the next agent verify "what does the prior agent claim
 matches what git shows".
 
 ## Crossing agent boundaries (Claude ↔ Codex ↔ Cursor ↔ human)
 
-- All three coding agents read `.agent/handoffs/CURRENT.md`.
+- All three coding agents read the `CURRENT.md` index, then the
+  per-slice batons it points at.
 - `takeover-prompt.md` is the canonical instruction to paste into
   the next agent.
 - The 3-step ritual at the top of `takeover-prompt.md` matches the
@@ -78,14 +98,16 @@ matches what git shows".
 
 - "See chat above" — chat is gone.
 - Background jobs without a PID / log / job ID pointer.
-- `<...>` placeholders left in CURRENT.md.
+- `<...>` placeholders left in the slice baton.
+- Hand-editing `CURRENT.md` — it is a derived index.
 - Destructive ops "left to do" — finish them or document the
   rollback.
 
 ## Archive policy
 
-When a CURRENT.md chapter is complete (its `remaining_actions` are
-done) and you start something new, move the consumed CURRENT.md +
-state into `.agent/handoffs/archive/YYYY-MM-DD-HHMM-<agent>-<topic>/`.
-Keep the most recent ~10 archive entries; older ones can be deleted
-unless they correspond to an open contract.
+When a slice is complete (its `remaining_actions` are done), release
+it: `./scripts/handoff.sh --release <slice>` clears the lease and sets
+`state: released` while preserving the baton's history. Batons for
+abandoned work can be set to `state: closed` by hand. Released/closed
+batons stay in `.agent/status/` (the index marks them 📦/🔒); delete
+them only when no open contract references them.

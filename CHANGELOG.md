@@ -2,6 +2,98 @@
 
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.0] - 2026-06-11
+
+Hardening release: 31 adversarially-verified fixes from a full audit of
+the scripts, hooks, skills, and CI against current Claude Code spec and
+production-skill conventions. Three themes: (1) **BSD/macOS portability**
+— several GNU-only constructs silently no-opped on stock macOS (the
+snapshot prune never pruned; `realpath --relative-to` errored into
+`$(...)`); (2) **gate-bypass hardening** — the heredoc strip threw away
+real commands after the first `<<`, so a heredoc prefix could smuggle
+`rm -rf` / DDL / `sbatch` past every gate, and common non-obfuscated
+forms (`rm -r -f`, `git -C … push --force`, lowercase `drop table`)
+slipped through; (3) **spec alignment** — `$CLAUDE_PROJECT_DIR` hook
+paths, per-hook timeouts, and a `SessionEnd` cleanup hook. Behavior is
+backward-compatible; only internals and defaults changed.
+
+### Added
+- `.claude/hooks/session-end-cleanup.sh` (wired in `settings.json` under
+  `SessionEnd`) — deletes this session's start marker; markers leaked by
+  crashed sessions are swept by a new >7d prune in the SessionStart hook,
+  and the markers dir is now gitignored.
+- `tests/run-baton-drift-tests.sh` — 5 assertions covering heartbeat-age
+  drift, `--stale-days`, README exclusion, and silent-on-empty behavior
+  (baton-drift.sh previously had zero test coverage). Wired into CI.
+- CI "GNU-ism tripwire" step — greps `scripts/` and `.claude/hooks/` for
+  `find -printf`, `realpath --relative-to`, `mapfile`, un-fallbacked
+  `stat -c`/`date -d`, and ungated `declare -A`, so BSD-breaking
+  constructs fail CI instead of silently no-opping on macOS.
+- 16 new hook-test fixtures; `tests/run-hook-tests.sh` grows 13→30 cases
+  (post-heredoc commands — including same-line `<<X; cmd` tails and the
+  `<<\EOF` delimiter form, split/quoted rm flags, env-var prefixes,
+  `git -C`, lowercase DDL, SessionEnd, sbatch in/after heredoc). The
+  same-line and backslash-delimiter cases are mutation-verified: they
+  fail under the previous strip.
+- `AGENTS.md` §"Slice ownership & leases" — the owner_session/heartbeat
+  lease model, 30-min freshness window, and `--release` lifecycle were
+  previously documented nowhere Codex/Cursor would read them.
+
+### Changed
+- `scripts/handoff.sh`: snapshot rotation now sorts session-dir names
+  lexicographically (chronological by construction) instead of GNU
+  `find -printf` — on macOS the old prune silently kept every snapshot
+  forever. The mkdir-fallback lock self-heals stale locks (dead holder
+  PID or >120s age) instead of deadlocking until manual cleanup;
+  reclaim is serialized through a `.reap` mutex with staleness
+  re-verified while holding it (0 races in a 240-acquisition stress on
+  macOS bash 3.2; a naive check-then-rmdir let two waiters tear down a
+  live lock), and every loop iteration consumes the 30s budget so a
+  failing reclaim cannot busy-spin. `realpath --relative-to` replaced
+  with a pure-shell prefix strip. Non-numeric `version:` values no
+  longer abort the handoff. `--release` inserts `owner_agent: human`
+  when the field is absent so released batons always pass the Stop-hook
+  schema. No-slice mode detects the frontmatter-less derived-index
+  CURRENT.md and skips the version bump with a notice instead of
+  claiming a phantom bump.
+- `scripts/status.sh`: derived-table cells escape `|` (free-text actions
+  can no longer split the Markdown table); the no-pyyaml flow-list parser
+  is quote-aware (matching the pyyaml path on `"do A, then B"`); the awk
+  discovery scan reads flow-form `remaining_actions`; deprecated
+  `datetime.utcnow()` replaced with timezone-aware now (Python 3.13).
+- All three Bash gates strip heredoc/here-string **bodies** while keeping
+  the commands that follow them — including commands on the SAME line as
+  the `<<` operator (which the shell executes) — and recognize the
+  `<<\EOF` delimiter form so its body cannot false-positive (fail-closed
+  to raw-command scan if python3 is absent). The destructive gate also
+  strips quotes around flags, anchors through env-var prefixes and
+  `git -C/-c` options, and matches split `rm` flags; the DB gate matches
+  DDL case-insensitively; the SLURM gate no longer counts
+  `.agent/contracts/README.md` as an active contract.
+- `.claude/settings.json`: hook + statusLine commands are
+  `$CLAUDE_PROJECT_DIR`-based (CWD-independent) and every hook has an
+  explicit `timeout`.
+- `.claude/hooks/session-start-decay-check.sh`: empty-skills deployment
+  no longer trips `set -u` on bash 3.2.
+- `tests/run-skill-lint.sh`: frontmatter values are everything after the
+  *first* colon — the old `-F': *'` split mangled descriptions containing
+  colons and mis-measured their length.
+- CI: the handoff smoke test is hermetic (AGENT_ROOT fixture with a
+  legacy frontmattered CURRENT.md) so the version-bump behavior it pins
+  stays testable after the template is adapted.
+- Docs synced to the per-slice baton model where they still taught the
+  old one: `docs/concepts/handoff-protocol.md` rewritten (batons
+  authoritative, CURRENT.md derived, no `active_slice` /
+  `schema_version`); `/handoff` SKILL.md prescribes the per-slice
+  schema + `--release`; `.claude/hooks/README.md` documents the
+  body-strip rule, the per-slice Stop-hook validation, and the
+  SessionEnd hook; README quick start seeds batons via `init-slice.sh`;
+  AGENTS.md / CLAUDE.md no longer claim a live SessionStart collision
+  warning (it only fires under the `ENTERING_SLICE` test seam — the
+  check is manual for every agent); `docs/concepts/enforcement-hooks.md`
+  teaches the body-strip heredoc rule (the old `${cmd%%<<*}` advice was
+  the bypass) and the `$CLAUDE_PROJECT_DIR` registration form.
+
 ## [0.4.2] - 2026-06-11
 
 Auto-freshness on the per-slice baton model. The derived `CURRENT.md`

@@ -266,7 +266,7 @@ prints a warning.
 |---|---|
 | Slash command not in autocomplete | Restart Claude Code; it scans `.claude/skills/` at startup. |
 | Hook blocks a legitimate command | Tighten the regex in the hook script. Heredoc bodies are already excluded. |
-| Stop hook says "frontmatter validation: missing X" | Add the field, or pass schema_version: 1 and the required keys. |
+| Stop hook says "frontmatter validation: missing X" | Add the missing field to your slice's `.agent/status/<slice>.md` (schema: `.agent/status/README.md`). Do NOT edit the derived CURRENT.md; there is no schema_version field. |
 | `Agent(subagent_type=foo)` fails | Confirm `.claude/agents/foo.md` exists; restart Claude Code. |
 | SLURM gate keeps blocking | `find .agent/contracts -name '*.md' ! -name '_template.md' -mtime -7` returned empty. Create a contract. |
 | Codex sees yaml frontmatter | Expected — Codex ignores it and reads the body (backward compatible). |

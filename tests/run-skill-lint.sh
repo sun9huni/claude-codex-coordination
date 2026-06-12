@@ -49,8 +49,11 @@ lint_one() {
     fi
 
     # F2. name: slug-shaped.
+    # Field values are everything after the FIRST ':' — splitting on
+    # every ':' would mangle values that legally contain colons (e.g.
+    # "Use when: ..." in descriptions, "Bash(git status:*)" in tools).
     local name
-    name=$(awk -F': *' '/^name:/{print $2; exit}' <<< "$fm" | tr -d '[:space:]')
+    name=$(awk '/^name:/{sub(/^name:[[:space:]]*/, ""); print; exit}' <<< "$fm" | tr -d '[:space:]')
     if [ -z "$name" ]; then
         errs+=("F2: missing 'name:' field")
     elif ! [[ "$name" =~ ^[a-z][a-z0-9-]*$ ]]; then
@@ -59,7 +62,7 @@ lint_one() {
 
     # F3. description: present, 60-400 chars, not generic.
     local desc
-    desc=$(awk -F': *' '/^description:/{$1=""; sub(/^ /, ""); print; exit}' <<< "$fm")
+    desc=$(awk '/^description:/{sub(/^description:[[:space:]]*/, ""); print; exit}' <<< "$fm")
     if [ -z "$desc" ]; then
         errs+=("F3: missing 'description:' field")
     else
@@ -79,7 +82,7 @@ lint_one() {
 
     # F4. allowed-tools (if present) — character whitelist.
     local at
-    at=$(awk -F': *' '/^allowed-tools:/{$1=""; sub(/^ /, ""); print; exit}' <<< "$fm")
+    at=$(awk '/^allowed-tools:/{sub(/^allowed-tools:[[:space:]]*/, ""); print; exit}' <<< "$fm")
     if [ -n "$at" ]; then
         # Allow alphanumerics, space, parens, asterisks, colons, slashes,
         # dots, pipes, hyphens, underscores, percent.

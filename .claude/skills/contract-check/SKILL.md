@@ -1,6 +1,7 @@
 ---
 name: contract-check
 description: Decide whether the in-flight work needs a contract per WORKFLOW.md §2 triggers (long-running job submission, 4+ files changed, ranking/eval change, API contract change, multi-write-scope edit, etc.). If yes, draft a contract from .agent/contracts/_template.md. Use before starting any non-trivial change.
+argument-hint: "(empty = inspect current dirty work)"
 allowed-tools: Read Edit Write Bash(git status:*) Bash(git diff:*) Bash(find:*) Bash(cat:*)
 ---
 

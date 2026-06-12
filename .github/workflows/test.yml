@@ -50,6 +50,41 @@ jobs:
           done < <(find . -type f -name '*.sh' -not -path './.git/*')
           exit $fail
 
+      - name: GNU-ism tripwire (BSD portability)
+        run: |
+          # scripts/ and .claude/hooks/ must run on stock macOS (BSD
+          # find/stat/date, bash 3.2). `bash -n` only catches syntax, so
+          # grep for the GNU-only constructs that bit us before:
+          #   - find -printf / realpath --relative-to / mapfile: never OK.
+          #   - stat -c / date -d: OK only inside this repo's fallback
+          #     idiom, which always carries `2>/dev/null` on the same line.
+          #   - declare -A: OK only when version-gated (a BASH_VERSINFO
+          #     check within the 5 preceding lines).
+          # Comment lines are ignored so docs may name the constructs.
+          fail=0
+          scan() {
+            grep -rnE --include='*.sh' "$1" scripts .claude/hooks 2>/dev/null \
+              | grep -vE '^[^:]*:[0-9]+:[[:space:]]*#' || true
+          }
+          hits="$(scan '(^|[[:space:]])-printf|realpath[[:space:]]+--relative-to|(^|[[:space:]])mapfile([[:space:]]|$)')"
+          if [ -n "$hits" ]; then
+            echo "GNU-only construct (find -printf / realpath --relative-to / mapfile):"
+            echo "$hits"; fail=1
+          fi
+          hits="$(scan '(^|[[:space:](])(stat -c|date (-u )?-d)([[:space:]]|$)' | grep -v '2>/dev/null' || true)"
+          if [ -n "$hits" ]; then
+            echo "stat -c / date -d outside a 2>/dev/null fallback chain:"
+            echo "$hits"; fail=1
+          fi
+          while IFS= read -r f; do
+            if grep -E '^[^#]*declare -A' "$f" >/dev/null 2>&1 \
+              && ! grep -B5 'declare -A' "$f" | grep -q 'BASH_VERSINFO'; then
+              echo "declare -A without a BASH_VERSINFO gate within 5 lines: $f"
+              fail=1
+            fi
+          done < <(find scripts .claude/hooks -type f -name '*.sh')
+          exit $fail
+
       - name: Run hook tests
         run: bash tests/run-hook-tests.sh
 
@@ -62,17 +97,33 @@ jobs:
       - name: Run harness lifecycle test
         run: bash tests/run-harness-lifecycle.sh
 
+      - name: Run baton drift test
+        run: bash tests/run-baton-drift-tests.sh
+
       - name: Smoke-test handoff.sh
         run: |
           git config user.email "ci@test"
           git config user.name "ci"
-          ./scripts/handoff.sh ci-test
-          test -L .agent/handoffs/state/latest
-          test -f .agent/handoffs/state/latest/meta.txt
-          grep -q "current_version: 1" .agent/handoffs/state/latest/meta.txt
+          # Hermetic: run against an AGENT_ROOT fixture with a LEGACY
+          # frontmattered CURRENT.md, so the version-bump behavior this
+          # smoke pins stays testable regardless of what the checkout's
+          # own CURRENT.md looks like (the generated index format has no
+          # frontmatter and deliberately skips the bump).
+          SB="$(mktemp -d)"
+          mkdir -p "$SB/.agent/handoffs"
+          printf -- '---\nversion: 0\n---\n# fixture\n' > "$SB/.agent/handoffs/CURRENT.md"
+          AGENT_ROOT="$SB/.agent" ./scripts/handoff.sh ci-test
+          test -L "$SB/.agent/handoffs/state/latest"
+          test -f "$SB/.agent/handoffs/state/latest/meta.txt"
+          grep -q "current_version: 1" "$SB/.agent/handoffs/state/latest/meta.txt"
           # Second run should bump to 2
-          ./scripts/handoff.sh ci-test
-          grep -q "current_version: 2" .agent/handoffs/state/latest/meta.txt
+          AGENT_ROOT="$SB/.agent" ./scripts/handoff.sh ci-test
+          grep -q "current_version: 2" "$SB/.agent/handoffs/state/latest/meta.txt"
+          # Index-format CURRENT.md (no frontmatter): bump must SKIP with
+          # a notice, not claim a phantom version change.
+          printf -- '<!-- GENERATED -->\n# CURRENT\n' > "$SB/.agent/handoffs/CURRENT.md"
+          AGENT_ROOT="$SB/.agent" ./scripts/handoff.sh ci-test | grep -q "derived index"
+          rm -rf "$SB"
 
       - name: Smoke-test init-slice.sh
         run: |

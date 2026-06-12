@@ -91,7 +91,10 @@ tool surface = less context, fewer accidents.
 ### Phase 7 — CURRENT.md yaml schema
 Frontmatter with `owner_agent`, `last_updated`, `active_slice`,
 `remaining_actions`. Stop hook validates. Codex continues to read
-the markdown body — backward compatible.
+the markdown body — backward compatible. (Superseded in v0.4: the
+schema moved to per-slice `.agent/status/<slice>.md` batons — the
+slice is the filename, so `active_slice` is gone — and CURRENT.md
+became a derived index over them.)
 
 ### Phase 8 — Ritual unification
 WORKFLOW.md and takeover-prompt.md aligned to the same 3 steps that
@@ -165,10 +168,14 @@ without relying on CLAUDE.md being re-read.
 
 ## What this harness does not solve
 
-- It does not synchronize **concurrent agent execution**. The model
-  is still one-active-agent at a time. Two agents writing
-  `CURRENT.md` at the same moment will produce a race. Add an
-  ownership lock if you need true concurrency.
+- It only partially synchronizes **concurrent agent execution**.
+  Since v0.4, concurrent sessions are safe as long as they work on
+  DIFFERENT slices: each session writes only its own
+  `.agent/status/<slice>.md` baton, `handoff.sh` serializes through
+  `OWNER.lock`, and `CURRENT.md` is a derived index regenerated
+  atomically. Two agents claiming the SAME slice is still a
+  coordination problem — the heartbeat/lease warns, it does not
+  prevent.
 - It does not measure governance compliance. The KPI doc in the
   reference deployment is aspirational — *what to measure*, not
   *how to collect it*. Building that telemetry is a separate

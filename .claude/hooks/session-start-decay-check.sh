@@ -142,6 +142,9 @@ fi
 # epoch under $AGENT_DIR/handoffs/state/session-markers/<session_id>.start.
 # The Stop hook uses this marker to detect "session ended without running
 # handoff.sh". Silent on empty/non-JSON stdin (manual hook invocation, tests).
+# Lifecycle: the SessionEnd hook (session-end-cleanup.sh) removes the marker
+# when the session truly ends; the prune below sweeps markers leaked by
+# crashed/killed sessions where SessionEnd never fired.
 session_id=""
 if [ ! -t 0 ]; then
     # stdin is connected to a pipe/file — try to read JSON. Use select with
@@ -157,10 +160,15 @@ if select.select([sys.stdin], [], [], 0.05)[0]:
     except Exception:
         pass' 2>/dev/null || echo "")
 fi
+markers_dir="$AGENT_DIR/handoffs/state/session-markers"
 if [ -n "$session_id" ]; then
-    markers_dir="$AGENT_DIR/handoffs/state/session-markers"
     mkdir -p "$markers_dir" 2>/dev/null || true
     printf '%s\n' "$(date +%s)" > "$markers_dir/$session_id.start" 2>/dev/null || true
+fi
+# Prune markers older than 7 days (BSD and GNU find both support
+# -mtime/-delete). Best-effort, never fatal.
+if [ -d "$markers_dir" ]; then
+    find "$markers_dir" -name '*.start' -type f -mtime +7 -delete 2>/dev/null || true
 fi
 
 # ---------- Job 2: bootstrap context injection (stdout JSON) ----------
@@ -236,7 +244,9 @@ list_present_skills() {
         name=$(basename "$d")
         [ -f "$d/SKILL.md" ] && found+=("/$name")
     done
-    echo "${found[*]}"
+    # Guard the expansion: "${found[*]}" on an EMPTY array trips `set -u`
+    # under bash 3.2 (macOS). Same idiom as the warnings/gate_lines guards.
+    [ ${#found[@]} -gt 0 ] && echo "${found[*]}" || echo ""
 }
 present_skills=$(list_present_skills)
 

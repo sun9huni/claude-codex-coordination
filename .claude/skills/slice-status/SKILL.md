@@ -53,7 +53,7 @@ empty (fresh template), tell the user to fill it in first.
 | "I'll just check `git log` instead." | git log shows merged history, not what's dirty in the active project repo nor what's in flight per `CURRENT.md`. Use all three sources. |
 | "Multiple slices apply to this work — show all." | A consolidated view of two slices is two reports glued together; it hides what matters in each. Pick one; run the skill twice if you really need both. |
 | "Static and live disagree, but live is probably wrong." | The disagreement IS the signal. Prefer live; flag the contradiction so the static gets refreshed. Suppressing it loses information. |
-| "Slice name is close enough — a typo'd variant should resolve." | No fuzzy match. The `WORKFLOW.md §1` table is authoritative; if `$ARGUMENTS` isn't a row, stop and ask. Silently coercing breaks `/route` and the Stop hook's VALID_SLICES check. |
+| "Slice name is close enough — a typo'd variant should resolve." | No fuzzy match. The `WORKFLOW.md §1` table is authoritative; if `$ARGUMENTS` isn't a row, stop and ask. Silently coercing breaks `/route`, and there is no `.agent/status/<typo>.md` baton to read. |
 
 ## Forbidden
 

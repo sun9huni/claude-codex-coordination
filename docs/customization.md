@@ -46,16 +46,13 @@ This creates the status + harness file with sensible templates. Edit
 them with real content as the slice develops; the first iteration
 can be minimal.
 
-## 4. Update `stop-handoff-check.sh` (≈ 1 min)
+## 4. Nothing to register for the Stop hook (≈ 0 min)
 
-Edit `.claude/hooks/stop-handoff-check.sh`, find `VALID_SLICES`, add
-your slice names:
-
-```python
-VALID_SLICES = {"backend", "ml", "infra"}
-```
-
-Without this, the Stop hook warns that `active_slice` is unknown.
+The slice IS the status filename: the Stop hook discovers every
+`.agent/status/<slice>.md` with a non-empty `owner_session` and
+validates its frontmatter against `.agent/status/README.md`
+automatically. There is no `VALID_SLICES` registry to edit —
+`init-slice.sh` creating the baton is the whole registration.
 
 ## 5. Customize the destructive-gate hook (≈ 2 min)
 
@@ -94,12 +91,14 @@ projects:
 
 Add anything specific to your domain.
 
-## 8. Seed `CURRENT.md` (≈ 2 min)
+## 8. Seed your first slice baton (≈ 2 min)
 
-Open `.agent/handoffs/CURRENT.md`. Replace the placeholder
-`remaining_actions` with your real first session's goal. Set
-`active_slice` to whichever slice you'll start on. Set
-`last_updated` to today.
+Open the `.agent/status/<slice>.md` that `init-slice.sh` created for
+the slice you'll start on. Replace the placeholder
+`remaining_actions` with your real first session's goal and set
+`last_updated` to today. Then `./scripts/handoff.sh <agent> <slice>`
+claims it and regenerates the derived `CURRENT.md` index (never edit
+the index by hand).
 
 ## 9. Add custom subagents as needed (incremental)
 

@@ -42,8 +42,8 @@ run `/slice-status <slice>` for the consolidated view."
 |---|---|
 | "One keyword matched — going with that slice." | One keyword isn't routing; it's pattern-matching. Verify the work signal actually fits §1's intent, not just shares a word. |
 | "Multiple slices match — I'll pick the most active one." | Don't guess. List the candidates and ask the user. Routing silently picks the *wrong* slice silently. |
-| "No row matches — I'll invent a new slice." | Forbidden. New slices need a `WORKFLOW.md §1` row + `VALID_SLICES` entry + status + harness files. Tell the user to add them (or run `./scripts/init-slice.sh`), not to guess one. |
-| "User typed a slice name directly — I'll just use it." | Verify it's in §1. A misspelling or stale alias should be caught here, not 5 turns later when the Stop hook rejects `active_slice`. |
+| "No row matches — I'll invent a new slice." | Forbidden. New slices need a `WORKFLOW.md §1` row + status + harness files. Tell the user to add them (or run `./scripts/init-slice.sh`), not to guess one. |
+| "User typed a slice name directly — I'll just use it." | Verify it's in §1. A misspelling or stale alias should be caught here, not 5 turns later when there's no `.agent/status/<slice>.md` baton to claim. |
 | "Empty `$ARGUMENTS` — I'll infer from the open files / cwd." | Ask the user explicitly. Inference from incidental context is exactly the silent-routing failure mode. |
 | "I'll embed a copy of the routing table in this skill body." | The table lives in `WORKFLOW.md §1` — read it at invocation time. An embedded copy goes stale silently. |
 

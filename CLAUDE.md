@@ -23,9 +23,11 @@ never hand-edited.
    the authoritative per-slice baton (`owner_session`, `heartbeat`,
    `remaining_actions`). Find the slice from the index, or consult the
    `WORKFLOW.md §1` routing table. A session claims a slice via
-   `owner_session` + `heartbeat`; the SessionStart hook warns if you
-   enter a slice whose heartbeat is fresh under a different
-   `owner_session`. If the file is older than 7 days, prefer
+   `owner_session` + `heartbeat`; check the claim YOURSELF — if the
+   heartbeat is fresh (≤30 min) under a different `owner_session`,
+   coordinate or pick another slice (the SessionStart hook's collision
+   warning only fires under the `ENTERING_SLICE` test seam, not live).
+   If the file is older than 7 days, prefer
    `./scripts/status.sh <slice>` for the live scan.
 3. **Drill down only if the task needs more context** —
    `.agent/projects/<slice>-harness.md` for deep workflow detail. Do

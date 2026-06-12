@@ -50,12 +50,16 @@ heuristics drift; visible keywords don't.
 
 ## Updating
 
+The slice IS the `.agent/status/<slice>.md` filename — there is no
+separate registry; the Stop hook and `status.sh` discover batons
+automatically.
+
 - New slice: `./scripts/init-slice.sh <name>`, then add the row to
-  `WORKFLOW.md §1` and `VALID_SLICES` in
-  `.claude/hooks/stop-handoff-check.sh`.
+  `WORKFLOW.md §1`.
 - Renaming: edit `WORKFLOW.md §1`, rename `.agent/status/<old>.md`
-  → `<new>.md`, rename `.agent/projects/<old>-harness.md`, update
-  `VALID_SLICES`. If the slice appears in any `CURRENT.md`
-  archive, that's frozen history — leave it.
-- Retiring: leave the status file with a "Status: retired" note,
-  remove from `VALID_SLICES`, remove the routing row.
+  → `<new>.md`, rename `.agent/projects/<old>-harness.md`. If the
+  slice appears in an archived snapshot, that's frozen history —
+  leave it.
+- Retiring: set `state: closed` in the baton (or
+  `./scripts/handoff.sh --release <name>` for completed work) and
+  remove the routing row; the index marks it 🔒/📦.

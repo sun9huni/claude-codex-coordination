@@ -115,6 +115,9 @@ Thumbs.db
 # They are reproducible from git history + diff so we do not track them.
 .agent/handoffs/state/sessions/
 .agent/handoffs/state/latest
+# Per-session start markers are runtime-only: SessionStart writes them,
+# SessionEnd removes them, and >7d leftovers are pruned at session start.
+.agent/handoffs/state/session-markers/
 # OWNER.lock is the flock target; OWNER.lock.d is the mkdir-based
 # fallback mutex (macOS/*BSD). Both are empty / runtime-only.
 .agent/handoffs/OWNER.lock

@@ -6,8 +6,10 @@
 #   (then register in .claude/settings.json hooks.PreToolUse[*].hooks[])
 #
 # "Active" contract = any .md file under .agent/contracts/ modified in
-# the last MAX_CONTRACT_AGE_DAYS (excluding _template.md). The intent
-# is: long-running jobs need a written intention + approval. Adjust
+# the last MAX_CONTRACT_AGE_DAYS (excluding _template.md and README.md —
+# documentation, not contracts; a fresh checkout's README mtime would
+# otherwise satisfy the gate for 7 days). The intent is: long-running
+# jobs need a written intention + approval. Adjust
 # MAX_CONTRACT_AGE_DAYS for your workflow.
 set -uo pipefail
 
@@ -32,7 +34,14 @@ tool_name=$(jq -r '.tool_name // ""' <<< "$input")
 [ "$tool_name" = "Bash" ] || exit 0
 
 cmd=$(jq -r '.tool_input.command // ""' <<< "$input")
-cmd_check="${cmd%%<<*}"
+
+# Strip heredoc and here-string BODIES — they are data, not commands —
+# while keeping any commands that follow them. (A naive ${cmd%%<<*}
+# would also throw away real commands after the first <<, so a heredoc
+# prefix could smuggle an sbatch past the gate.) Fail closed: if
+# python3 is missing or errors, scan the raw command instead.
+cmd_check=$(python3 -c 'import re,sys; s=sys.stdin.read(); s=re.sub(r"<<-?[ \t]*\\?([\"\x27]?)(\w+)\1([^\n]*\n).*?\n\2", r" \3", s, flags=re.S); s=re.sub(r"<<<\s*(\"[^\"]*\"|\x27[^\x27]*\x27|[^\s;&|]+)", " ", s); print(s)' <<< "$cmd" 2>/dev/null) || cmd_check="$cmd"
+[ -n "$cmd_check" ] || cmd_check="$cmd"
 
 ANCHOR='(^|[[:space:]]*\;|\&\&|\|\||\|[[:space:]]|'$'\n'')[[:space:]]*(sudo[[:space:]]+)?'
 
@@ -40,7 +49,8 @@ if [[ "$cmd_check" =~ ${ANCHOR}sbatch[[:space:]] ]]; then
     contracts_dir="$ROOT/.agent/contracts"
     if [ -d "$contracts_dir" ]; then
         recent=$(find "$contracts_dir" -maxdepth 1 -name '*.md' \
-                    ! -name '_template.md' -mtime "-${MAX_CONTRACT_AGE_DAYS}" | head -1)
+                    ! -name '_template.md' ! -name 'README.md' \
+                    -mtime "-${MAX_CONTRACT_AGE_DAYS}" | head -1)
         if [ -n "$recent" ]; then
             exit 0
         fi

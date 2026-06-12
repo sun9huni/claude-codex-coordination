@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Scaffold a new slice: status file, harness file, gentle reminder to
-# register it in WORKFLOW.md §1 and stop-handoff-check.sh.
+# register it in WORKFLOW.md §1. (The slice IS the status filename —
+# the Stop hook discovers and validates batons automatically; there is
+# no slice registry to update.)
 #
 # Usage: ./scripts/init-slice.sh <slice-name>
 #
@@ -10,7 +12,6 @@
 #     .agent/projects/backend-harness.md
 #   Prints reminders for:
 #     - WORKFLOW.md §1 routing row
-#     - .claude/hooks/stop-handoff-check.sh VALID_SLICES update
 
 set -euo pipefail
 
@@ -102,6 +103,6 @@ echo
 echo "[init-slice] don't forget to:"
 echo "  1. Add a row to WORKFLOW.md §1 routing table for '${SLICE}':"
 echo "     | <work signal keyword> | .agent/status/${SLICE}.md | .agent/projects/${SLICE}-harness.md | <reminder> |"
-echo "  2. Add '${SLICE}' to VALID_SLICES in .claude/hooks/stop-handoff-check.sh"
-echo "     (so the Stop hook recognizes it as a valid active_slice value)"
+echo "  2. Fill in the baton's goal + remaining_actions (the Stop hook"
+echo "     validates claimed batons automatically — no registry to update)."
 echo "  3. If this slice maps to a project repo, document the path in the harness file's File Map section."

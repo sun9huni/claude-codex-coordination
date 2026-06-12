@@ -12,8 +12,9 @@ files (CURRENT.md, status, contracts) rather than chat history.
 
 - **One session-start ritual** shared by all three agents (CLAUDE.md /
   AGENTS.md / WORKFLOW.md / takeover-prompt.md cannot drift apart).
-- **Schema-validated handoff state** in `.agent/handoffs/CURRENT.md`
-  with yaml frontmatter the next agent can parse without trusting chat.
+- **Schema-validated handoff state** in per-slice `.agent/status/<slice>.md`
+  batons (yaml frontmatter the next agent can parse without trusting
+  chat) plus a derived `.agent/handoffs/CURRENT.md` index over them.
 - **Enforcement hooks** (`PreToolUse`, `SessionStart`, `Stop`) that
   turn prose policies into actual blocks — force pushes, hard resets,
   rm -rf on shared storage, etc.
@@ -51,8 +52,9 @@ git init
 # 2. Fill in the placeholders
 #    - CLAUDE.md / AGENTS.md / WORKFLOW.md: replace <project-name> and
 #      describe your slices in the routing table
-#    - .agent/handoffs/CURRENT.md: set your owner_agent and first goal
-#    - .agent/status/<slice>.md: one file per slice you defined
+#    - ./scripts/init-slice.sh <slice>: scaffolds one
+#      .agent/status/<slice>.md baton + harness file per slice; fill
+#      in each baton's goal and first remaining_actions
 #    - .agent/projects/<slice>-harness.md: deep workflow detail per slice
 
 # 3. (Optional) enable the optional hooks for your stack
@@ -63,9 +65,9 @@ git init
 # 4. (Optional) port the example agents
 #    See examples/research-deployment/.claude/agents/
 
-# 5. First handoff to create a baseline
-#    Edit .agent/handoffs/CURRENT.md, then:
-./scripts/handoff.sh claude   # or codex / cursor
+# 5. First handoff to create a baseline (claims the slice baton and
+#    regenerates the derived CURRENT.md index)
+./scripts/handoff.sh claude <slice>   # or codex / cursor
 
 # 6. Commit
 git add -A && git commit -m "harness: initial setup from claude-codex-coordination"
@@ -78,15 +80,18 @@ ready to work.
 ## Architecture in one paragraph
 
 The workspace root holds three entry documents (`CLAUDE.md`, `AGENTS.md`,
-`WORKFLOW.md`) that point at one source of truth: `.agent/handoffs/CURRENT.md`.
-The Markdown body is human-readable; the yaml frontmatter is
-machine-validated. `.claude/` contains Claude's native primitives —
-hooks that block dangerous Bash, skills that are real slash commands,
-subagents that delegate with a narrow tool surface. `.agent/` is the
-cross-agent state: handoffs, slice status, contracts, project harness
-files. When the session ends, `./scripts/handoff.sh <next-agent>`
-snapshots state into `.agent/handoffs/state/` so the next agent —
-human, Claude, Codex, or Cursor — resumes from files, not chat history.
+`WORKFLOW.md`) that point at one source of truth: the per-slice
+`.agent/status/<slice>.md` batons, indexed by the derived
+`.agent/handoffs/CURRENT.md`. Each baton's Markdown body is
+human-readable; its yaml frontmatter is machine-validated. `.claude/`
+contains Claude's native primitives — hooks that block dangerous Bash,
+skills that are real slash commands, subagents that delegate with a
+narrow tool surface. `.agent/` is the cross-agent state: handoffs,
+slice status, contracts, project harness files. When the session ends,
+`./scripts/handoff.sh <next-agent> <slice>` refreshes the baton and the
+index (no-slice mode additionally snapshots git state into
+`.agent/handoffs/state/`) so the next agent — human, Claude, Codex, or
+Cursor — resumes from files, not chat history.
 
 See [docs/design.md](docs/design.md) for the longer story.
 
