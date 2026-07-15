@@ -1,26 +1,44 @@
 #!/usr/bin/env bash
-# SessionStart hook: three jobs.
-#
-# Job 0 — freshness (non-blocking): regenerate the derived CURRENT.md index
-#   from the slice files (so Jobs 1 & 2 reflect the latest batons) and surface
-#   baton<->reality drift. Skipped under the AGENT_ROOT test seam.
+# SessionStart hook: two jobs.
 #
 # Job 1 — stderr WARNINGS (non-blocking):
 #   stale CURRENT.md (>24h), stale .agent/status/<slice>.md (>7d),
 #   and project_* memory regression detection.
 #
 # Job 2 — stdout JSON: emit hookSpecificOutput.additionalContext so
-#   the workspace bootstrap (current state + ritual + skill / agent /
-#   gate inventory + memory policy) is injected directly into the
-#   session context, instead of relying on CLAUDE.md being re-read
-#   every session.
+#   workspace bootstrap (current state + ritual + skills inventory +
+#   approval gates) is injected directly into the session, eliminating
+#   reliance on CLAUDE.md being re-read every session.
 #
-# Always exits 0.
+# Always exits 0 — informational + bootstrap, never blocking.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# AGENT_ROOT seam: all .agent reads go under $AGENT_DIR. Default (unset) =
+# the repo's own .agent, matching handoff.sh / status.sh.
 AGENT_DIR="${AGENT_ROOT:-$ROOT/.agent}"
 CURRENT="$AGENT_DIR/handoffs/CURRENT.md"
+
+# ---------- FRESHNESS (root-cause fix) ----------
+# The derived index (CURRENT.md) only refreshes when someone runs
+# `status.sh index`. Sessions that edited batons but skipped that left the
+# index — and the Notion view derived from it — frozen (e.g. a slice showed a
+# job RUNNING days after it COMPLETED). So regenerate the index from the slice
+# files FIRST (the bootstrap + staleness checks below then reflect the latest
+# batons), and surface baton<->reality drift to stderr. Pure/read-only,
+# best-effort, never blocks. Skip the mutation under a test seam (AGENT_ROOT set).
+if [ -z "${AGENT_ROOT:-}" ]; then
+    if [ -f "$ROOT/scripts/status.sh" ]; then
+        bash "$ROOT/scripts/status.sh" index >/dev/null 2>&1 || true
+    fi
+    if [ -x "$ROOT/scripts/baton-drift.sh" ]; then
+        _drift="$(bash "$ROOT/scripts/baton-drift.sh" 2>/dev/null || true)"
+        if [ -n "$_drift" ]; then
+            echo "[session-start] ⚠️ baton drift — update the baton before trusting it (a job may have finished / heartbeat is stale):" >&2
+            printf '%s\n' "$_drift" | sed 's/^/  /' >&2
+        fi
+    fi
+fi
 
 # ---------- Portable mtime (GNU → BSD → Python) ----------
 file_mtime() {
@@ -29,26 +47,6 @@ file_mtime() {
         || python3 -c "import os,sys; print(int(os.path.getmtime(sys.argv[1])))" "$1" 2>/dev/null \
         || echo ""
 }
-
-# ---------- Job 0: freshness (root-cause fix) ----------
-# The derived index (CURRENT.md) only refreshes when someone runs
-# `status.sh index`. Sessions that edited batons but skipped that left the
-# index — and any view derived from it — frozen (e.g. a slice showing a job
-# RUNNING days after it finished). So regenerate the index from the slice files
-# FIRST, so the bootstrap + staleness checks below reflect the latest batons,
-# then surface baton<->reality drift to stderr. Pure/read-only, best-effort,
-# never blocks. Skip the mutation under the AGENT_ROOT test seam.
-if [ -z "${AGENT_ROOT:-}" ]; then
-    if [ -f "$ROOT/scripts/status.sh" ]; then
-        bash "$ROOT/scripts/status.sh" index >/dev/null 2>&1 || true
-    fi
-    if [ -x "$ROOT/scripts/baton-drift.sh" ]; then
-        _drift="$(bash "$ROOT/scripts/baton-drift.sh" 2>/dev/null || true)"
-        if [ -n "$_drift" ]; then
-            printf '[baton-drift] %s\n' "$_drift" >&2
-        fi
-    fi
-fi
 
 # ---------- Job 1: decay warnings (stderr) ----------
 now=$(date +%s)
@@ -235,45 +233,45 @@ else
   Known slices: ${all_slices:-(none)}"
 fi
 
-# Detect which skills + optional hooks are actually present so the
-# bootstrap reflects this deployment, not the template default.
-list_present_skills() {
-    local found=()
-    for d in "$ROOT"/.claude/skills/*/; do
-        [ -d "$d" ] || continue
-        name=$(basename "$d")
-        [ -f "$d/SKILL.md" ] && found+=("/$name")
-    done
-    # Guard the expansion: "${found[*]}" on an EMPTY array trips `set -u`
-    # under bash 3.2 (macOS). Same idiom as the warnings/gate_lines guards.
-    [ ${#found[@]} -gt 0 ] && echo "${found[*]}" || echo ""
-}
-present_skills=$(list_present_skills)
+# notion-sync-pending: a prior handoff dropped a marker but did not refresh
+# Notion (MCP-only). Surface it so THIS (MCP-capable) session auto-applies it.
+pending_block=""
+ns_marker="$AGENT_DIR/handoffs/state/notion-sync-pending"
+if [ -s "$ns_marker" ]; then
+    ns_slices=$(awk '{print $1}' "$ns_marker" 2>/dev/null | sort -u | paste -sd' ' - 2>/dev/null || true)
+    pending_block=$(cat <<PB
 
-# Approval-gate inventory: enumerate which PreToolUse Bash gates
-# are actually wired (present in .claude/hooks/, not just optional/).
-gate_lines=()
-[ -f "$ROOT/.claude/hooks/pre-bash-slurm-gate.sh" ] && \
-    gate_lines+=("  sbatch (without an active contract in .agent/contracts/)")
-[ -f "$ROOT/.claude/hooks/pre-bash-db-gate.sh" ] && \
-    gate_lines+=("  psql ... DROP TABLE / TRUNCATE / ALTER TABLE")
-[ -f "$ROOT/.claude/hooks/pre-bash-destructive-gate.sh" ] && \
-    gate_lines+=("  rm -rf on shared / harness dirs, git push --force, git reset --hard origin/*, git branch -D")
-
-gate_text="(none enabled)"
-if [ ${#gate_lines[@]} -gt 0 ]; then
-    gate_text=$(printf '%s\n' "${gate_lines[@]}")
+⚠️ NOTION SYNC PENDING: ${ns_slices}
+  A prior handoff updated these slices' batons but did NOT refresh Notion (the
+  write path is MCP-only). As part of THIS session start, apply the sync now:
+    1. ./scripts/notion_sync.py --emit-apply-plan <slice>   (resolves HOME+ROW page_ids + preflight, one block)
+    2. apply HOME via MCP replace_content + the ROW via update_properties (page_ids are in the plan)
+    3. ./scripts/notion_sync.py --stamp-home-applied   (clears the marker)
+PB
+)
 fi
 
-# Productive PostToolUse hook (post-edit-format) present?
-productive_line=""
-if [ -x "$ROOT/.claude/hooks/post-edit-format.sh" ]; then
-    productive_line="Productive hook: post-edit-format runs on Edit/Write (formatter detected at hook invocation time)."
+# notion-project-pending: a slice handoff also flags its project hub for re-render.
+np_marker="$AGENT_DIR/handoffs/state/notion-project-pending"
+if [ -s "$np_marker" ]; then
+    np_projects=$(awk '{print $1}' "$np_marker" 2>/dev/null | sort -u | paste -sd' ' - 2>/dev/null || true)
+    pending_block=$(cat <<PB
+${pending_block}
+
+⚠️ NOTION PROJECT HUB PENDING: ${np_projects}
+  A handoff changed a slice in these project hubs; re-render each (slice statuses
+  are pulled live from batons at render time):
+    1. ./scripts/notion_sync.py --emit-project-plan <project>
+    2. apply via MCP replace_content (page_id is in the plan)
+    3. ./scripts/notion_sync.py --stamp-project-applied <project>   (clears the marker)
+PB
+)
 fi
 
-# Build bootstrap payload.
+# Build the bootstrap payload.
 bootstrap=$(cat <<EOF
-[workspace bootstrap] per-slice .agent/status/<slice>.md files are authoritative; CURRENT.md is their derived index. Do NOT rely on chat history.
+[workspace bootstrap] /home/ubuntu conventions are active. Do NOT rely on chat history; per-slice .agent/status/<slice>.md files are authoritative (CURRENT.md is their derived index).
+${pending_block}
 
 ${active_state}
 
@@ -283,18 +281,25 @@ Session-start ritual (every session, in order):
   3. Drill down to .agent/projects/<slice>-harness.md only if needed.
   If the slice is owned by another live session (fresh heartbeat, different owner_session), follow .agent/handoffs/takeover-prompt.md steps 4-7.
 
-Available slash skills (detected in this deployment):
-  ${present_skills:-(none — populate .claude/skills/)}
+Available slash skills (all native):
+  Process:    /handoff   /slice-status   /contract-check   /route
+  Expertise:  /code-review   /refactor-simplify   /test-gen   /debug
 
-Subagents (.claude/agents/): invoke with the Agent tool, subagent_type=<name>.
+Subagents (Agent tool):
+  slurm-status (haiku, read-only HPC inspector)
+  fragmap-diagnose (opus, zero-compute diagnostician)
+  mmgbsa-stage-check (opus, stage gate)
 
-Auto-blocked Bash commands (PreToolUse hooks present in this deployment):
-${gate_text}
+Auto-blocked Bash commands (PreToolUse hooks):
+  sbatch (without active contract under .agent/contracts/, last 7 days)
+  psql ... DROP TABLE / TRUNCATE / ALTER TABLE
+  rm -rf on /mnt/data*, .agent, .claude, .codex, .git
+  git push --force / -f / git reset --hard origin/.../upstream/... / git branch -D
 
-${productive_line}
+Productive hook: Edit/Write on *.py → ruff format auto-runs (skip lists: /tmp, .agent/scratch, .agent/handoffs/state).
 
 Memory policy:
-  auto-memory = user_profile + feedback_* + reference_* only.
+  auto-memory (~/.claude/projects/<workspace>/memory) = user_profile + feedback_* + reference_* only.
   Project state lives in .agent/, NEVER duplicated to auto-memory.
 
 When in doubt: /route "<one-liner about your work>" to find the right slice + harness.

@@ -202,6 +202,47 @@ else:
 PY
 }
 
+# ── Baton-lint (non-blocking) ────────────────────────────────────────────────
+# Run scripts/notion_sync.py's lint_baton(slice) on the SAME slice(s) that
+# validate_slice covers, and surface any issues under a [baton-lint] prefix.
+#
+# notion_sync computes REPO_ROOT from its own __file__ with NO env override, so
+# a plain CLI invocation would read the REAL repo's .agent and ignore the
+# AGENT_ROOT test seam. We therefore run the lint inline and monkeypatch
+# notion_sync.REPO_ROOT to the PARENT of $AGENT_DIR (mirroring the pytest
+# tests), so the hook honors AGENT_ROOT. Best-effort: any failure is silent and
+# the hook's exit status is never affected.
+lint_baton_warn() {
+    # $1 = slice name (no .md). Prints a [baton-lint] block to stderr when the
+    # lint reports issues; otherwise silent. Never changes the hook's exit code.
+    local slice="$1"
+    command -v python3 >/dev/null 2>&1 || return 0
+    [ -f "$ROOT/scripts/notion_sync.py" ] || return 0
+    local repo_for_lint
+    repo_for_lint="$(cd "$AGENT_DIR/.." 2>/dev/null && pwd)" || return 0
+    [ -n "$repo_for_lint" ] || return 0
+
+    local out
+    out="$(python3 - "$ROOT" "$repo_for_lint" "$slice" 2>/dev/null <<'PY' || true
+import sys
+sys.path.insert(0, sys.argv[1] + "/scripts")
+from pathlib import Path
+import notion_sync
+notion_sync.REPO_ROOT = Path(sys.argv[2])
+for issue in notion_sync.lint_baton(sys.argv[3]):
+    print(issue)
+PY
+)"
+
+    if [ -n "$out" ]; then
+        {
+            echo "[baton-lint] status/$slice.md:"
+            printf '%s\n' "$out" | sed 's/^/  - /'
+        } >&2
+    fi
+    return 0
+}
+
 # Read one frontmatter scalar from a status file (awk, no PyYAML needed).
 fm_scalar() {
     awk -v key="$2" '
@@ -228,6 +269,7 @@ if [ -n "${ENTERING_SLICE:-}" ]; then
     slice_file="$status_dir/$ENTERING_SLICE.md"
     if [ -f "$slice_file" ]; then
         validate_slice "$slice_file"
+        lint_baton_warn "$ENTERING_SLICE"
     fi
     # If the named slice file is absent we stay silent — non-blocking by design.
 elif [ -d "$status_dir" ]; then
@@ -243,6 +285,7 @@ elif [ -d "$status_dir" ]; then
         owner="$(fm_scalar "$slice_file" owner_session)"
         [ -n "$owner" ] || continue
         validate_slice "$slice_file"
+        lint_baton_warn "$(basename "$slice_file" .md)"
     done
 fi
 
@@ -292,6 +335,58 @@ if [ -n "$session_id" ]; then
             done
         fi
     fi
+fi
+
+# ── Home-staleness warning (non-blocking) ─────────────────────────────────────
+# Task 7 writes .agent/handoffs/state/home-render.stamp on each successful
+# Notion home apply (notion_sync.py --stamp-home-applied), recording the rev and
+# an `applied: <ISO-UTC>` timestamp. The MCP write path is manual, so this hook
+# can only REMIND: if any slice baton's mtime is newer than the last apply, the
+# rendered Notion home is stale and should be refreshed. Advisory only — this
+# section never changes the hook's exit status (the hook ends in `exit 0`).
+stamp_file="$AGENT_DIR/handoffs/state/home-render.stamp"
+if [ ! -f "$stamp_file" ]; then
+    echo "[home-stale] no home-render.stamp — the Notion home has never been stamped; run ./scripts/notion_sync.py --render-home -> replace_content -> --stamp-home-applied" >&2
+else
+    # Value carries colons (HH:MM:SS), so capture everything after the first
+    # "applied:" prefix rather than field-splitting on ':'.
+    applied_iso=$(awk '/^applied:/ { sub(/^applied:[[:space:]]*/, ""); print; exit }' "$stamp_file" | tr -d '[:space:]')
+    applied_epoch=$(iso_to_epoch "${applied_iso:-}")
+    if [ -n "${applied_epoch:-}" ] && [ -d "$status_dir" ]; then
+        stale_slices=""
+        for sf in "$status_dir"/*.md; do
+            [ -f "$sf" ] || continue
+            [ "$(basename "$sf")" = "README.md" ] && continue
+            m=$(file_mtime "$sf")
+            [ -n "${m:-}" ] || continue
+            if [ "$m" -gt "$applied_epoch" ]; then
+                stale_slices="${stale_slices:+$stale_slices }$(basename "$sf" .md)"
+            fi
+        done
+        if [ -n "$stale_slices" ]; then
+            echo "[home-stale] baton(s) changed since the last home apply (${applied_iso}): ${stale_slices}. Run ./scripts/notion_sync.py --render-home -> MCP replace_content -> --stamp-home-applied to refresh the Notion home." >&2
+        fi
+    fi
+fi
+
+# ── Notion-sync-pending escalation (non-blocking) ─────────────────────────────
+# A handoff that dropped a Notion sync writes a line per slice into
+# .agent/handoffs/state/notion-sync-pending (the MCP replace_content step is
+# manual and may not have run yet). This is an EXPLICIT, slice-named complement
+# to the [home-stale] mtime backstop above: while [home-stale] infers staleness
+# from mtimes, this marker records that a specific handoff deferred the write.
+# Advisory only — this section never changes the hook's exit status.
+notion_pending_marker="$AGENT_DIR/handoffs/state/notion-sync-pending"
+if [ -s "$notion_pending_marker" ]; then
+    pending_slices=$(awk '{print $1}' "$notion_pending_marker" 2>/dev/null | sort -u | paste -sd' ' - 2>/dev/null || true)
+    echo "[notion-sync-pending] ${pending_slices} — a handoff dropped a Notion sync that has not been applied. Run ./scripts/notion_sync.py --emit-apply-plan <slice> -> MCP replace_content + update_properties (page_ids in the plan) -> --stamp-home-applied (clears it)." >&2
+fi
+
+# Project-hub re-sync (advisory): a slice handoff also flags its project hub.
+notion_project_marker="$AGENT_DIR/handoffs/state/notion-project-pending"
+if [ -s "$notion_project_marker" ]; then
+    pending_projects=$(awk '{print $1}' "$notion_project_marker" 2>/dev/null | sort -u | paste -sd' ' - 2>/dev/null || true)
+    echo "[notion-project-pending] ${pending_projects} — a project hub is stale. Run ./scripts/notion_sync.py --emit-project-plan <project> -> MCP replace_content (page_id in the plan) -> --stamp-project-applied <project> (clears it)." >&2
 fi
 
 exit 0

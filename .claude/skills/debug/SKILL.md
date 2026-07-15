@@ -25,8 +25,9 @@ Read `$ARGUMENTS`. Resolve to one of:
 - **Pointer into a log file** → tail the log (`tail -50` first;
   don't load the whole file) and identify the error block.
 
-Also consult `.agent/handoffs/CURRENT.md.failure_log` if it points
-at a known path — recent failures often live there.
+Also consult the active slice's `.agent/status/<slice>.md` frontmatter
+`failure_log` field (optional, per-slice) if it points at a known path
+— recent failures often live there.
 
 ## Step 2 — Read the failing location
 

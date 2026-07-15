@@ -8,91 +8,54 @@ or before switching agents.
 Hand off when any of these is true:
 
 - Session context budget below ~20%.
-- Switching from one agent (Claude / Codex / Cursor) to another.
+- Switching from Cursor / Claude / Codex to another agent.
 - Pausing for human review or approval gate.
-- Long-running job (HPC, training, batch) needs to outlive the
+- Long-running job (SLURM, MMGBSA, ensemble run) needs to outlive the
   current chat.
 
-## Required per-slice baton frontmatter (`.agent/status/<slice>.md`)
+## Required artifacts
 
-```yaml
----
-owner_session: <auto UUID, set by handoff.sh>
-owner_label: <optional, e.g. dev-a — may be empty>
-owner_agent: <claude|codex|cursor|human>
-version: <integer, bumped by handoff.sh>
-last_updated: <today, ISO date>
-heartbeat: <ISO timestamp, set by handoff.sh>
-remaining_actions:                  # 1-3 items
-  - "first concrete next step"
-  - "..."
-contract_pointers:
-  - .agent/contracts/<slice>-<topic>-<YYYYMMDD>.md
----
-```
+The per-slice working state lives in `.agent/status/<slice>.md`. The
+derived index lives under `.agent/handoffs/`:
 
-Optional but recommended: `session_title`, `files_touched_count`,
-`verification_run`, `verification_result`, `failure_log`,
-`prior_slice_archive`, `approval_required`.
+- `.agent/status/<slice>.md` — frontmatter updated, never empty placeholders.
+- `.agent/handoffs/CURRENT.md` — regenerated derived index.
 
-The `version`, `owner_session`, and `heartbeat` fields are managed by
-`./scripts/handoff.sh <agent> <slice>` — you do not edit them by hand.
-`version` increments on every successful claim and is used by the Stop
-hook to detect "agent did not run /handoff this session"; `heartbeat`
-and `owner_session` record who currently owns the slice.
+Run `./scripts/handoff.sh <next-agent> <slice>` to claim/refresh the
+slice frontmatter, then `./scripts/status.sh index` to regenerate
+`CURRENT.md`. `CURRENT.md` is the lab-wide index, never filled by hand.
 
-## Required Markdown body sections
+Historical `state/` snapshots may exist from legacy/no-slice handoffs.
+Treat them as supporting evidence, not as the current per-slice baton.
 
-- **Goal** — one paragraph, observable.
-- **Current status** — concrete state.
-- **Files touched this session** — real paths.
-- **Verification run** — command + result, or "not run" + reason.
-- **Failure / error log location** — absolute path or "n/a".
-- **Memory / contract pointers** — paths.
+## `.agent/status/<slice>.md` frontmatter fields that MUST be filled
+
+- `owner_session` (the session id claiming this slice)
+- `owner_label` (human-readable label for the owning session)
+- `owner_agent` (the agent finishing the turn)
+- `version` (bump on each update)
+- `last_updated` (today, ISO date)
+- `heartbeat` (timestamp proving the owner session is live)
+- `remaining_actions`: exactly 1–3 concrete steps
+- `contract_pointers` (open contracts under `.agent/contracts/`, or empty)
+
+The Markdown body still carries the human-readable detail: goal (one
+paragraph, observable), current status, files touched this session (real
+paths, not placeholders), verification run (command + result, or "not
+run" with reason), failure / error log location (or "n/a"), and approval
+required (or "none").
 
 ## Forbidden at handoff time
 
-- Uncommitted destructive ops left dangling (rm -rf, db drops).
-- Background jobs you cannot point at by PID, job ID, or log path.
-- "See chat above" — chat is not durable. Inline what matters.
-- Empty `<...>` placeholders in your `status/<slice>.md` baton.
-
-## After your slice baton is updated
-
-Run, in order:
-
-```bash
-./scripts/handoff.sh <next-agent> <slice>   # refreshes the slice baton frontmatter
-./scripts/status.sh index                   # regenerates the derived CURRENT.md index
-```
-
-The first command claims the slice and refreshes its
-`status/<slice>.md` frontmatter (owner/heartbeat/version). The second
-regenerates the derived `CURRENT.md` index — never hand-edited.
-
-Since v0.4.2 `handoff.sh` already runs the index regen for you (on both
-the claim and `--release` paths) and surfaces any baton drift, so the
-explicit `status.sh index` is now a belt-and-suspenders step you can
-skip when you just ran `handoff.sh`.
-
-The git-snapshot files below are written by the plain no-slice mode
-(`./scripts/handoff.sh <agent>`, no slice argument):
-
-- `.agent/handoffs/state/git-status.txt`
-- `.agent/handoffs/state/git-log.txt`
-- `.agent/handoffs/state/diff.patch`
-- `.agent/handoffs/state/diff-staged.patch`
-- `.agent/handoffs/state/session-note.md`  (if missing)
-- `.agent/handoffs/state/meta.txt`
-
-The Stop hook flags any `<...>` placeholder left in your
-`status/<slice>.md` baton frontmatter on the way out.
+- Uncommitted destructive ops (rm -rf, db drops) left dangling.
+- Background jobs you cannot point at by PID, SLURM id, or log path.
+- "See chat above" — chat is not durable. Inline it.
+- Empty placeholders left as `<...>` in the slice's `.agent/status/<slice>.md`.
 
 ## Archive policy
 
-When a handoff is fully consumed (its remaining_actions are done) and
-you are starting a new chapter, the new owner may move the prior
-`CURRENT.md` and matching `state/` snapshot to
-`.agent/handoffs/archive/YYYY-MM-DD-HHMM-<agent>-<topic>/`. Keep the
-most recent ~10. Older snapshots can be deleted unless they
-correspond to an open contract.
+When a handoff is consumed, the new owner may move the prior slice
+`.agent/status/<slice>.md` and any matching legacy `state/` snapshot into
+`.agent/handoffs/archive/YYYY-MM-DD-HHMM-<agent>/`.
+Keep the most recent 10. Older snapshots can be deleted unless they
+correspond to an open contract under `.agent/contracts/`.

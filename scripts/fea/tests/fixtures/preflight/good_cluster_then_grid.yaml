@@ -1,0 +1,14 @@
+# Minimal valid preflight fixture: shape copied from
+# configs/vav1_pipeline/fragmap_conditioning_example.yaml.
+# Only the keys the validator inspects are kept (mode/fragmap_npz/
+# reference_pdb/channels); long feature/hotspot blocks dropped.
+# Both paths point at REAL existing files (verified to exist).
+fragmap_conditioning:
+  enabled: true
+  mode: cluster_then_grid
+  fragmap_npz: /mnt/data/users/kim/code/FKSFold-Boltz_Advancement/data/silcs_oracle_real/ternary_r2_maps.npz
+  reference_pdb: /mnt/data/users/kim/code/FKSFold-Boltz_Advancement/data/silcs_oracle_real/ternary_r2/ternary_r2_equil.pdb
+  channels:
+    - acceptor_ether
+    - amide_donor
+    - amide_acceptor

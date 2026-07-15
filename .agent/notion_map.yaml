@@ -1,0 +1,84 @@
+# Notion sync mapping (slice -> Notion hub page_id, shared data-source IDs).
+# NO secrets here. The integration token lives in .agent/.secrets/notion.env.
+# The sync script reads this file to find each slice's hub page and the
+# shared data sources, and uses conclusion_marker to find/own the hub
+# conclusion callout.
+
+slices:
+  fragmap:
+    hub_page_id: 36d1e76c-3b60-8136-8921-ee505191976d
+  mmgbsa:
+    hub_page_id: 36d1e76c-3b60-8178-aa35-e69e2be57dc4
+  vav1:
+    hub_page_id: 36d1e76c-3b60-810e-8aa5-e9e4706c8b8a
+  aigen-fold-core:
+    hub_page_id: 36d1e76c-3b60-81e5-94a3-fddefcca6e40
+  harness:
+    hub_page_id: 36d1e76c-3b60-813d-ab19-cc9b41e69d4a
+
+data_sources:
+  reports: 94d8277f-bf77-4bc4-8acc-8b37701b830b
+  decisions: b11ae976-472b-46dd-98d9-b42ebe2e8b7b
+  artifacts: 2e47ef6d-0511-44c7-a55f-a9eb5bfe864f
+
+conclusion_marker: "〔sync〕"  # token the sync script uses to find/own the hub conclusion callout
+
+# v0.5 — Notion IA redesign (Engineering Wiki Projects + ADR Decisions + W&B Experiments).
+# Contract: .agent/contracts/harness-notion-redesign-20260529.md
+# IDs are TBD until Tasks 5-7 create / restructure the underlying Notion DBs.
+v0_5:
+  # Navigator HOME (Mission Control) page — render via `notion_sync.py --render-home`,
+  # apply via MCP replace_content. Recorded so apply tooling resolves it WITHOUT an
+  # MCP search (contract harness-notion-headless-apply-20260609).
+  home_page_id: 28d1e76c-3b60-8069-a83b-eab69a131a99
+  slices_db_id: 3435079f-07ca-4d3c-85c8-f51f0efb0936
+  slices_db_data_source_id: 01c936b7-2afd-4425-92f7-d94148cab227
+  # Slice row IDs in the Slices DB (Task 9 seed)
+  slice_row_ids:
+    fragmap:      36f1e76c-3b60-8195-90ce-d22406675706
+    mmgbsa:       36f1e76c-3b60-8140-90a5-ebf0d42e4702
+    vav1:         36f1e76c-3b60-816b-8b93-d1a24e2cd728
+    aigen-fold-core: 36f1e76c-3b60-8134-85a4-ced073b21197
+    harness:      36f1e76c-3b60-81e7-af5f-c32c7443755f
+    arl:          36f1e76c-3b60-81ed-9d49-db9f78a2e067
+    fea:          ""   # backfilled by harness-fea-slice-split T5 (Notion Slices-DB row insert)
+    m-relativity: 37a1e76c-3b60-8127-aeee-d1bb8acfd30d
+    vav1-ubq:     38a1e76c-3b60-813a-a279-e46dfe20734b
+    sar:          38e1e76c-3b60-81c4-98aa-d62298889308
+    boltz-jump:   39e1e76c-3b60-8172-9349-f0c35e5864e5
+  # Decisions data source UUID is unchanged (Task 6 adds ADR Properties in place); kept here as a v0.5-aware reference.
+  decisions_data_source_id: b11ae976-472b-46dd-98d9-b42ebe2e8b7b
+  experiments_db_id: 949a3553-1e44-41a7-a8d3-d673ae2f0efe
+  experiments_db_data_source_id: b1a7f410-364b-4af3-8939-5624ca351605
+  # Status enum for Slices DB
+  slice_status_enum:
+    - 활성    # active
+    - 완료    # done (closed cycle)
+    - 릴리즈  # released (terminal handoff)
+    - 휴면    # dormant
+  # Status enum for Decisions DB (ADR)
+  adr_status_enum:
+    - Proposed
+    - Accepted
+    - Rejected
+    - Implemented
+    - Superseded
+  # Status enum for Experiments DB
+  experiment_status_enum:
+    - Queued
+    - Running
+    - Completed
+    - Failed
+    - Cancelled
+  # Project hub pages — auto-rendered via `notion_sync.py --emit-project-plan <slug>`,
+  # apply via MCP replace_content. Editorial body lives in `template` (version-controlled);
+  # the {{SLICES}} marker is filled from the listed slices' live batons each render.
+  project_hubs:
+    aigen-fold:
+      page_id: 36d1e76c-3b60-8130-95bb-d653bfa4ff54
+      template: .agent/notion_project_aigen.md
+      slices:
+        - fragmap
+        - mmgbsa
+        - vav1-ubq
+        - aigen-fold-core

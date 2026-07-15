@@ -106,4 +106,33 @@ for f in "$status_dir"/*.md; do
   fi
 done
 
+# ---- (C) proactive watch: dead jobs + full disk branches ------------------
+# Advisory snapshot from the FEA Stage-2 watch (scripts/fea/watch.py). Read-only,
+# never actuates. Disk is always probed (per mergerfs branch); jobs are
+# death-checked only when .agent/handoffs/state/fea-watched-jobs lists ids, so a
+# session with nothing in flight pays only a fast df. watch.py is stdlib-only and
+# imported directly (NOT `-m scripts.fea`, which would pull in pandas/numpy).
+if command -v python3 >/dev/null 2>&1; then
+  ( cd "$ROOT" && timeout 15 python3 - <<'PYEOF' 2>/dev/null
+try:
+    from scripts.fea import watch
+    rep = watch.scan_once(job_ids=watch.read_watch_list())
+    for f in rep.findings:
+        glyph = "✗" if f.severity == "error" else "⚠"
+        print(f"[watch] {glyph} [{f.code}] {f.subject}: {f.message}")
+except Exception:
+    pass
+PYEOF
+  ) || true
+fi
+
+# ---- (D) cross-slice dependency edges --------------------------------------
+# Resolve any `depends_on:` edges declared in batons (scripts/baton-deps.py).
+# Read-only: reports DEP-BLOCKED (upstream file not yet committed) or DEP-READY
+# (committed+clean → downstream can proceed). Multi-repo aware (the workspace
+# nests separate git repos). stdlib-only python; never actuates.
+if command -v python3 >/dev/null 2>&1; then
+  ( cd "$ROOT" && timeout 20 python3 scripts/baton-deps.py 2>/dev/null ) || true
+fi
+
 exit 0

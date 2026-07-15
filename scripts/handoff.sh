@@ -218,35 +218,6 @@ slice_auto_commit() {
   echo "[handoff] auto-committed: ${matches[*]}"
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# refresh_derived_views: keep the DERIVED index (CURRENT.md) fresh and surface
-# baton<->reality drift. Called at the end of BOTH the claim and release paths.
-#
-# Staleness root cause: batons get updated but CURRENT.md (and any view derived
-# from it) lags because nobody re-ran `status.sh index`. Regenerating here makes
-# every /handoff refresh the index — and pick up new slices — then flags drift
-# (e.g. a job the baton still calls RUNNING that the scheduler has finished).
-# status.sh takes no lock, so this is safe to call while handoff holds OWNER.lock.
-# Pure/read-only, best-effort — it can NEVER fail the handoff.
-# ─────────────────────────────────────────────────────────────────────────────
-refresh_derived_views() {
-  if [ -f "$ROOT/scripts/status.sh" ]; then
-    if bash "$ROOT/scripts/status.sh" index >/dev/null 2>&1; then
-      echo "[handoff] CURRENT.md index regenerated"
-    else
-      echo "[handoff] warning: index regen failed — run ./scripts/status.sh index" >&2
-    fi
-  fi
-  if [ -x "$ROOT/scripts/baton-drift.sh" ]; then
-    local _drift
-    _drift="$(bash "$ROOT/scripts/baton-drift.sh" 2>/dev/null || true)"
-    if [ -n "$_drift" ]; then
-      echo "[handoff] ⚠️ baton-drift — fix before the next agent trusts these:" >&2
-      printf '%s\n' "$_drift" | sed 's/^/    /' >&2
-    fi
-  fi
-}
-
 # CURRENT.md is required only in no-slice mode (it is the live single-session
 # SSOT we bump + snapshot against). In slice mode CURRENT.md is a derived
 # index produced later by status.sh, so we do not require it here.
@@ -413,7 +384,12 @@ if [ "$RELEASE_MODE" -eq 1 ]; then
   echo "[handoff] released slice=$SLICE version: $cur_v -> $new_v"
   echo "[handoff] wrote: $slice_file"
   slice_auto_commit
-  refresh_derived_views
+  # keep the derived index fresh on release too (see claim-path note).
+  if [ -f "$ROOT/scripts/status.sh" ]; then
+    bash "$ROOT/scripts/status.sh" index >/dev/null 2>&1 \
+      && echo "[handoff] CURRENT.md index regenerated" \
+      || echo "[handoff] warning: index regen failed — run ./scripts/status.sh index" >&2
+  fi
   echo "[handoff] done"
   exit 0
 fi
@@ -528,8 +504,67 @@ if [ -n "$SLICE" ]; then
 
   echo "[handoff] slice=$SLICE owner_session=$owner_session version: $cur_v -> $new_v heartbeat=$hb_iso"
   echo "[handoff] wrote: $slice_file"
+
+  # --- notion-sync-pending marker (auto-sync; harness-notion-autosync) ---------
+  # Record that THIS slice handed off so the next MCP-capable session
+  # auto-applies the Notion sync (SessionStart surfaces it; --stamp-home-applied
+  # clears it). MCP-only write path => this only drops a marker + prints the
+  # recipe; it can NEVER fail the handoff (every line is guarded).
+  marker_dir="$AGENT_DIR/handoffs/state"
+  marker="$marker_dir/notion-sync-pending"
+  mkdir -p "$marker_dir" 2>/dev/null || true
+  ns_rev="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo '?')"
+  ns_iso="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo '?')"
+  if [ -f "$marker" ]; then
+    grep -v "^$SLICE " "$marker" > "$marker.tmp" 2>/dev/null || true
+    mv "$marker.tmp" "$marker" 2>/dev/null || true
+  fi
+  printf '%s %s %s\n' "$SLICE" "$ns_rev" "$ns_iso" >> "$marker" 2>/dev/null || true
+  {
+    echo "[handoff] NOTION SYNC PENDING for '$SLICE' (MCP-only — not scriptable):"
+    echo "  1. ./scripts/notion_sync.py --emit-apply-plan $SLICE"
+    echo "  2. apply HOME via MCP replace_content + the ROW via update_properties (page_ids in the plan)"
+    echo "  3. ./scripts/notion_sync.py --stamp-home-applied   # clears this marker"
+  } >&2
+
+  # project-hub auto-sync (harness-notion-autosync): if THIS slice belongs to a
+  # project hub (notion_map.yaml v0_5.project_hubs), flag the hub too so the next
+  # MCP-capable session re-renders it (slice statuses are pulled live at render).
+  # Best-effort, fully guarded — can NEVER fail the handoff.
+  proj_marker="$marker_dir/notion-project-pending"
+  projects="$(python3 "$ROOT/scripts/notion_sync.py" --project-for-slice "$SLICE" 2>/dev/null || true)"
+  if [ -n "$projects" ]; then
+    for proj in $projects; do
+      if [ -f "$proj_marker" ]; then
+        grep -v "^$proj " "$proj_marker" > "$proj_marker.tmp" 2>/dev/null || true
+        mv "$proj_marker.tmp" "$proj_marker" 2>/dev/null || true
+      fi
+      printf '%s %s %s\n' "$proj" "$ns_rev" "$ns_iso" >> "$proj_marker" 2>/dev/null || true
+      echo "  4. ./scripts/notion_sync.py --emit-project-plan $proj  -> MCP replace_content (page_id in plan) -> --stamp-project-applied $proj" >&2
+    done
+  fi
+
   slice_auto_commit
-  refresh_derived_views
+  # --- keep the DERIVED views fresh (root-cause fix) --------------------------
+  # Staleness happened because batons were updated but CURRENT.md/Notion lagged:
+  # nobody re-ran `status.sh index`. Regenerate it here so /handoff always
+  # refreshes the index (and picks up new slices). Then surface baton<->reality
+  # drift (e.g. a job the baton still calls RUNNING that SLURM has finished).
+  # Pure/read-only, best-effort, can NEVER fail the handoff.
+  if [ -f "$ROOT/scripts/status.sh" ]; then
+    if bash "$ROOT/scripts/status.sh" index >/dev/null 2>&1; then
+      echo "[handoff] CURRENT.md index regenerated"
+    else
+      echo "[handoff] warning: index regen failed — run ./scripts/status.sh index" >&2
+    fi
+  fi
+  if [ -x "$ROOT/scripts/baton-drift.sh" ]; then
+    _drift="$(bash "$ROOT/scripts/baton-drift.sh" 2>/dev/null)"
+    if [ -n "$_drift" ]; then
+      echo "[handoff] ⚠️ baton-drift — fix before the next agent trusts these:" >&2
+      printf '%s\n' "$_drift" | sed 's/^/    /' >&2
+    fi
+  fi
   echo "[handoff] done"
   exit 0
 fi

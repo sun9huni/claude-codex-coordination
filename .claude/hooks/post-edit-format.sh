@@ -1,29 +1,23 @@
 #!/usr/bin/env bash
-# Productive PostToolUse hook (enabled by default — see settings.json):
-# auto-format files after Edit/Write/MultiEdit.
+# PostToolUse hook: auto-format Python files after Edit/Write/MultiEdit.
 #
-# Safe defaults — every formatter is OPTIONAL:
-#   .py                                       → `ruff format` if installed
-#   .js/.jsx/.ts/.tsx/.json/.md/.yaml/.yml    → `prettier --write` if installed
-#   .sh/.bash                                 → `shfmt -w` if installed
-#   anything else                             → untouched
+# Runs `ruff format` on the touched file. ruff auto-detects nearby
+# pyproject.toml so per-project style settings are honored. If ruff
+# is not installed in any known path the hook silently skips —
+# productive hooks should NOT block successful tool calls.
 #
-# If a formatter is not installed for a given extension, the hook is
-# a silent no-op for that file. If you want to disable formatting
-# entirely, remove this hook from .claude/settings.json
-# hooks.PostToolUse.
-#
-# This is the only PRODUCTIVE hook (vs the defensive PreToolUse
-# gates). It mutates the file after the tool call to keep style
-# consistent. Always exits 0 — productivity should never block.
+# Stderr is shown to Claude so it knows the file was reformatted
+# (useful before the next Read).
 set -uo pipefail
 
-# Silent skip if jq missing — this is a productive hook, not a gate;
-# degrading gracefully is correct here.
+# Silent skip if jq missing — this is a productive hook, not a security
+# gate; degrading gracefully is correct here.
 command -v jq >/dev/null 2>&1 || exit 0
 
 input=$(cat)
 tool_name=$(jq -r '.tool_name // ""' <<<"$input")
+
+# Only react to file-mutating tools.
 case "$tool_name" in
     Edit|Write|MultiEdit) ;;
     *) exit 0 ;;
@@ -32,77 +26,48 @@ esac
 file_path=$(jq -r '.tool_input.file_path // ""' <<<"$input")
 [ -n "$file_path" ] && [ -f "$file_path" ] || exit 0
 
-# Skip ephemera (tmp / scratch / handoff state). Extend this list
-# for your environment.
+# Only Python (extend here as you add formatters).
+case "$file_path" in
+    *.py) ;;
+    *) exit 0 ;;
+esac
+
+# Skip ephemera (tmp / scratch / handoff state).
 case "$file_path" in
     /tmp/*|/var/tmp/*) exit 0 ;;
     */.agent/scratch/*) exit 0 ;;
     */.agent/handoffs/state/*) exit 0 ;;
 esac
 
-# Find a formatter. Workspace customization point: add your env's
-# preferred formatter paths here.
-find_bin() {
-    local name="$1"
-    for cand in "$@"; do
-        if [ -n "$cand" ] && [ -x "$cand" ]; then
-            echo "$cand"
-            return 0
-        fi
-    done
-    command -v "$name" 2>/dev/null
-}
+# Find ruff (prefer workspace conda env, then any conda env, then PATH).
+ruff_bin=""
+for cand in \
+    /home/ubuntu/miniconda3/envs/arl-py313/bin/ruff \
+    /home/ubuntu/miniconda3/envs/BindCraft/bin/ruff \
+    /home/ubuntu/miniconda3/bin/ruff \
+    "$(command -v ruff 2>/dev/null || true)"; do
+    if [ -n "$cand" ] && [ -x "$cand" ]; then
+        ruff_bin="$cand"
+        break
+    fi
+done
 
-# Portable sha256 for "did anything change" check.
+[ -z "$ruff_bin" ] && exit 0
+
+# Format. Compare hash before/after to know if anything changed.
+# Portable sha256: GNU coreutils sha256sum first, BSD shasum -a 256 fallback.
 file_hash() {
     sha256sum "$1" 2>/dev/null | awk '{print $1}' \
         || shasum -a 256 "$1" 2>/dev/null | awk '{print $1}' \
         || echo "?"
 }
 
-format_with() {
-    local bin="$1" file="$2"
-    local before after
-    before=$(file_hash "$file")
-    "$bin" format --quiet "$file" >/dev/null 2>&1 || return 1
-    after=$(file_hash "$file")
-    if [ "$before" != "$after" ] && [ "$before" != "?" ]; then
-        echo "[auto-format] $(basename "$bin") format -> $file" >&2
-    fi
-}
+before=$(file_hash "$file_path")
+"$ruff_bin" format --quiet "$file_path" >/dev/null 2>&1 || exit 0
+after=$(file_hash "$file_path")
 
-case "$file_path" in
-    *.py)
-        # === Customize the search path for your environment ===
-        ruff_bin=$(find_bin ruff \
-            "$HOME/.local/bin/ruff" \
-            /usr/local/bin/ruff)
-        # ======================================================
-        [ -n "$ruff_bin" ] && format_with "$ruff_bin" "$file_path"
-        ;;
-    *.js|*.jsx|*.ts|*.tsx|*.json|*.md|*.yaml|*.yml)
-        # Prettier is optional — only formats if installed.
-        prettier_bin=$(find_bin prettier "$HOME/.local/bin/prettier")
-        if [ -n "$prettier_bin" ]; then
-            before=$(file_hash "$file_path")
-            "$prettier_bin" --write "$file_path" >/dev/null 2>&1 || exit 0
-            after=$(file_hash "$file_path")
-            if [ "$before" != "$after" ]; then
-                echo "[auto-format] prettier -> $file_path" >&2
-            fi
-        fi
-        ;;
-    *.sh|*.bash)
-        shfmt_bin=$(find_bin shfmt "$HOME/go/bin/shfmt")
-        if [ -n "$shfmt_bin" ]; then
-            before=$(file_hash "$file_path")
-            "$shfmt_bin" -w "$file_path" >/dev/null 2>&1 || exit 0
-            after=$(file_hash "$file_path")
-            if [ "$before" != "$after" ]; then
-                echo "[auto-format] shfmt -> $file_path" >&2
-            fi
-        fi
-        ;;
-esac
+if [ "$before" != "$after" ] && [ "$before" != "?" ]; then
+    echo "[auto-format] ruff format -> $file_path" >&2
+fi
 
 exit 0

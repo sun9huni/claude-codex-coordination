@@ -1,0 +1,13 @@
+# Input YAML for a 9NFR ternary run — pocket contacts SHIFTED (historical bug).
+# Canonical VAV1 pocket ground truth (1-based seq) = {16,17,18,19,20}.
+# This fixture reproduces the off-by-one/shifted bug: chain B = {14..19}.
+constraints:
+  - pocket:
+      binder: C
+      contacts:
+        - [B, 14]
+        - [B, 15]
+        - [B, 16]
+        - [B, 17]
+        - [B, 18]
+        - [B, 19]

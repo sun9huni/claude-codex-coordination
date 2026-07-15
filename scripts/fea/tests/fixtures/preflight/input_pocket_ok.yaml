@@ -1,0 +1,13 @@
+# Input YAML for a 9NFR ternary run — pocket contacts CORRECT.
+# Canonical VAV1 pocket ground truth (1-based seq) = {16,17,18,19,20}.
+# Mirrors the real shape: top-level `constraints` list; each item may have
+# a `pocket` with `binder` and `contacts` = list of [chain, resid] pairs.
+constraints:
+  - pocket:
+      binder: C
+      contacts:
+        - [B, 16]
+        - [B, 17]
+        - [B, 18]
+        - [B, 19]
+        - [B, 20]

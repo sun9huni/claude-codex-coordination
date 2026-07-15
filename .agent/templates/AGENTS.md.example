@@ -1,0 +1,88 @@
+# <Project> Workspace Guide
+
+## Map
+
+- `src/` — <what lives here>
+- `tests/` — <what lives here>
+- `docs/` — product, architecture, ADRs, runbooks, QA
+- `.agent/` — harness (contracts, checklists, handoffs, evals, ...)
+- `scripts/` — verify, smoke, handoff, ...
+
+## Read first
+
+- Session start: `.agent/handoffs/CURRENT.md` index, then the matching
+  `.agent/status/<slice>.md`
+- Non-trivial edits: `.agent/checklists/change-discipline.md`
+- Large work: create `.agent/contracts/<task>.md` from
+  `.agent/templates/contract.md`
+
+## Verify
+
+```bash
+./scripts/verify.sh
+```
+
+Task-specific gates:
+
+- UI: `./scripts/browser-check.sh`
+- AI/RAG/search: `./scripts/eval.sh`
+- Smoke (fast): `./scripts/smoke.sh`
+
+## Approval gates
+
+Stop and ask before:
+
+- DB schema or destructive migration
+- Production deploy
+- Secret / credential changes
+- SLURM submission of expensive jobs
+- Force-push or history rewrite
+
+## Handoff
+
+End of session or before context fills:
+
+```bash
+./scripts/handoff.sh <next-agent> <slice>
+./scripts/status.sh index
+```
+
+Before running that, update only `.agent/status/<slice>.md` with no
+`<placeholder>` left. `.agent/handoffs/CURRENT.md` is a generated index;
+do not hand-edit it.
+
+## Notion IA (v0.5)
+
+If you mirror `.agent/` state into Notion, treat Notion as a **derived
+view** (reverse sync is a non-goal) and model it as **three databases**
+fronted by a **Navigator home**. Keep real DB ids in a map file (e.g.
+`.agent/notion_map.yaml`), not inline here.
+
+- **Slices DB** — one row per slice. `Status` derives from the slice's
+  `state:` frontmatter (e.g. `active→Active`, `closed→Done`,
+  `released→Released`, `dormant→Dormant`); a missing state defaults to
+  active. Status values may be localized; identifiers stay English.
+- **Decisions DB** — an **ADR registry**. ADR `Status`
+  (Proposed / Accepted / Rejected / Implemented / Superseded) derives from
+  the source contract's `status:`: `pending→Proposed`,
+  `approved→Accepted`, `done→Implemented`. Rejected / Superseded are set
+  manually.
+- **Experiments DB** — one row per job / phase / release.
+
+**Navigator home** = five linked views: Active Slices / Recent Decisions /
+Running Experiments / Recent Reports / Docs.
+
+**Lifecycle.** The intended convention is for `/handoff` to keep the
+Slices row and ADR rows fresh automatically; a read/compute script can emit
+upsert-keyed JSON (`--migrate {slices,contracts,slurm,home,all}`) for manual
+or MCP-driven application. Document which parts are wired vs. intended in a
+runbook so sessions never claim un-shipped automation works.
+
+## Completion rules
+
+Do not claim done unless:
+
+- scope is limited to the request
+- `./scripts/verify.sh` ran (or the reason it could not run is stated)
+- the relevant task-specific gate ran
+- remaining risks are listed

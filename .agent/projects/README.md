@@ -1,54 +1,30 @@
-# Project Harness Files
+# Project Harness Index
 
-One file per slice (and optionally one per date-stamped snapshot).
-Deeper than `.agent/status/<slice>.md` — these are the *workflow
-designs* an agent reads when the status file is not enough.
+This directory contains project-specific Codex harness designs for active work
+detected from `/home/ubuntu/.cursor` and the current server workspace.
 
-## When to read
+## Active Harness Designs
 
-- A new agent is taking over a slice and needs to learn the pipeline
-  vocabulary, key files, and pitfalls.
-- The work is about to hit a non-trivial decision point that the
-  status file does not cover.
+- `recent-cursor-activity-20260518.md`: evidence from Cursor state, plans,
+  transcripts, canvases, and recent output files.
+- `aigen-fold-boltz-core-harness.md`: source repository harness for AIGEN-Fold
+  (Boltz-2 fork) steering, ranking, docs, and tests.
+- `aigen-fold-actual-file-map-20260518.md`: source-backed map of actual project
+  files, local/shared divergence, active entrypoints, and verification gates.
+- `aigen-fold-fragmap-9nfr-harness.md`: FragMap, 9NFR structural recovery, and
+  target-occupancy steering harness.
+- `aigen-fold-mmgbsa-slurm-harness.md`: shared workspace, MMGBSA, F105, normtest,
+  and SLURM production harness.
+- `vav1-ranking-harness.md`: VAV1 ensemble ranking and production-rank harness.
+- `arl-threads-coscientist-harness.md`: ARL Co-Scientist (paper discovery →
+  ranking → experiment pipeline) project harness. Project-local `AGENTS.md` /
+  `CLAUDE.md` are authoritative; `make check` is the required gate.
 
-## Naming
+## Use Order
 
-```
-<slice>-harness.md                  # stable, evergreen workflow detail
-<slice>-<topic>-<YYYYMMDD>.md       # time-stamped snapshots (e.g. activity logs, file maps)
-```
-
-## Suggested structure
-
-```markdown
-# <slice> harness
-
-## Mental model
-- Pipeline stages
-- Vocabulary unique to this slice
-- Where each kind of file lives
-
-## File map
-- `<key dir 1>`: <what's there>
-- `<key dir 2>`: <what's there>
-
-## Common workflows
-- "How to add a new ..."
-- "How to investigate a failure of ..."
-
-## Pitfalls (avoid these)
-- ...
-
-## Verification
-- How to know the slice is healthy
-- Smoke / eval / regression checks
-```
-
-## Distinction from `.agent/contracts/`
-
-- Harness = workflow design (durable).
-- Contract = single-change commitment (ephemeral, lifecycle ends).
-
-A harness can reference contracts (which past contracts shaped the
-current design); contracts can reference the harness (which workflow
-they extend or modify).
+1. Read `/home/ubuntu/AGENTS.md`.
+2. Read the project-specific harness document here.
+3. Read the relevant project files or plans named in that harness.
+4. Create a task contract under `.agent/contracts/` for large or production
+   changes.
+5. Run the listed verification gates before reporting completion.

@@ -1,127 +1,125 @@
-# Slice Status Files
+# Slice Status
 
-One file per slice defined in `WORKFLOW.md §1`. Filename matches the
-slice name: `.agent/status/<slice>.md`.
-
-## Purpose
-
-Each `.agent/status/<slice>.md` is the **authoritative per-slice baton**:
-it names the live owner of the slice and holds the per-slice next
-actions. `.agent/handoffs/CURRENT.md` is a **DERIVED** lab-wide index
-generated from these files by `scripts/status.sh index` — never
-hand-edited.
-
-Read the slice file at session start when entering / resuming that
-slice. Updated at session end (overwritten, not appended — git keeps
-the history).
+One file per active slice. Each file is the **per-slice resume point** — short,
+overwritten every session that touches the slice. This is the authoritative
+per-slice baton; `.agent/handoffs/CURRENT.md` is the DERIVED lab-wide index
+generated from these files by `scripts/status.sh index` (never hand-edited).
 
 ## Auto scan
 
-- `./scripts/status.sh` lists every slice discovered under
-  `status/*.md`.
-- `./scripts/status.sh <slice>` summarizes one slice.
-- `./scripts/status.sh index` regenerates `CURRENT.md`.
+`./scripts/status.sh <slice>` reads Cursor plans, shared outputs, local git,
+and ARL milestones live and prints a one-screen summary. Use it when the
+written status below looks older than ~7 days, or as a sanity check before
+trusting the file. Run `./scripts/status.sh` with no args to list slices,
+`./scripts/status.sh all` for every slice.
 
-Use the scan when the written status looks older than ~7 days, or as a
-sanity check before trusting the file.
+## Rule
+
+- Update the matching status file when you finish a working session in that
+  slice.
+- Keep each file under ~25 lines. Status, not history.
+- Cite the live-truth artifact (output dir, manifest file, plan file) so a
+  reader can verify before acting.
+- If the status is older than 7 days, treat it as stale and re-scan before
+  relying on it.
+
+## Files
+
+- `fragmap.md` — FragMap / 9NFR / pharmacophore / target occupancy
+- `mmgbsa.md` — MMGBSA, SLURM staged chains, F105, normtest RunA/B, backup import
+- `vav1.md` — VAV1 ensemble ranking
+- `aigen-fold-core.md` — src/boltz, steering internals, configs, workflow
+- `arl.md` — ARL Co-Scientist
 
 ## Frontmatter schema (per-slice baton)
 
-Each `status/<slice>.md` carries this YAML frontmatter block at the
-top:
-
-- `owner_session` — auto-generated UUID identifying the live session
-  that owns this slice; set by `scripts/handoff.sh`.
-- `owner_label` — optional human-readable label (e.g. `claude-A`); may
-  be empty.
+- `owner_session` — auto-generated UUID identifying the live session that owns
+  this slice. Collision-safe; set by `scripts/handoff.sh`.
+- `owner_label` — optional human-readable label (e.g. `claude-A`), for index
+  readability. May be empty.
 - `owner_agent` — tool axis: `claude` | `codex` | `cursor`.
 - `version` — integer, bumped each handoff write.
 - `last_updated` — ISO date.
 - `heartbeat` — ISO timestamp of last write; used by the SessionStart
   claim-check to detect a live owner (freshness window default 30 min).
-- `remaining_actions` — list (max ~3), per-slice next actions.
+- `remaining_actions` — list (max ~3), the per-slice next actions (moved here
+  from `CURRENT.md`). **Hygiene (this drives the Notion Navigator action
+  queues):** lead with the ACTUAL next action — not a `✅`-done summary — and
+  prefix each item with `DECISION:` (needs a human call), `AGENT:`
+  (agent-ready work), or `BLOCKED:` (waiting on X) so it classifies cleanly
+  into the cockpit queues. Keep every item valid YAML: quote any string
+  containing `:` or `'` — a bare apostrophe (e.g. `aigen-fold-core's`) closes a
+  single-quoted scalar early and breaks `yaml.safe_load`. The sync has a regex
+  fallback, but it is a safety net, not a license: an unparseable baton shows
+  as `Regex fallback` / `Parser warning` in `./scripts/notion_sync.py --audit`.
 - `contract_pointers` — list of relevant contract paths.
-- `state` — lifecycle: `active` | `closed` | `released`. Default `active`
-  if absent. `handoff.sh` preserves the value when present; only
-  `handoff.sh --release <slice>` flips it to `released`.
+- `depends_on` — OPTIONAL list of cross-slice dependency edges, each
+  `<upstream-slice-stem>:file=<workspace-relative-path>`. The edge is SATISFIED
+  when that path is tracked AND clean (committed, not dirty) in its OWNING git
+  repo — the real meaning of "waiting on slice X to commit file Y from its WIP".
+  `scripts/baton-deps.py` (run by `baton-drift.sh`, so it surfaces at session
+  start / pre-compact) reports `DEP-BLOCKED` while you wait and `DEP-READY` once
+  the upstream commits — then drop the edge. Multi-repo aware (the workspace
+  nests separate repos, e.g. `FKSFold-Boltz_Advancement/`). Only `file=` is
+  supported (the only cross-slice condition that has occurred). Quote the value
+  (the `:` would otherwise break YAML); use a concrete path, never a
+  `<placeholder>` token (the Stop-hook placeholder scan would flag it). Example:
+  `depends_on: ["aigen-fold-core:file=FKSFold-Boltz_Advancement/workflow/scripts/run_mmpbsa.py"]`.
+- `state` — lifecycle: `active` | `closed` | `released`. Default `active` if
+  absent. `handoff.sh` preserves the value if present, defaults to `active`
+  on a baton missing the field. `handoff.sh --release <slice>` is the only
+  command that sets `state: released`.
+
+Going forward each `status/<slice>.md` carries this YAML frontmatter block at
+the top. This is the per-slice baton: it names the live owner and holds the
+per-slice next actions. The "One file per active slice" framing above is
+unchanged — the frontmatter ADDS structured ownership/handoff fields to it.
 
 **RULE**: A session writes only its own slice's status file.
-`CURRENT.md` is a DERIVED index generated by `scripts/status.sh` —
-never hand-edit it.
+`.agent/handoffs/CURRENT.md` is a DERIVED lab-wide index generated by
+`scripts/status.sh` — never hand-edit it.
 
 Example:
 
 ```yaml
 ---
 owner_session: 3f2b9c7a-1d4e-4a8b-9c0f-7e6d5a4b3c21
-owner_label: dev-a
+owner_label: claude-A
 owner_agent: claude
 version: 7
 last_updated: 2026-05-27
 heartbeat: 2026-05-27T14:32:05Z
 state: active
 remaining_actions:
-  - Wire the new endpoint into the router
-  - Add a regression test for the empty-input case
-  - Hand off to the next session for the follow-up sweep
+  - Re-run light-filter recal on the 139-batch set
+  - Confirm n37 component-exclusion scores against baseline
+  - Hand off to codex for the multiseed sweep
 contract_pointers:
-  - .agent/contracts/slice-1-example-20260527.md
+  - .agent/contracts/fragmap-light-filter-recal-20260526.md
+  - .agent/contracts/fragmap-ab-139batch-20260526.md
 ---
 ```
 
 ## Lifecycle verbs
 
-- `./scripts/handoff.sh <agent> <slice>` — claim or refresh the slice
-  baton. Defaults `state: active` when absent; preserves the value
-  when present (handoff doesn't flip lifecycle state).
+- `./scripts/handoff.sh <agent> <slice>` — claim or refresh the slice baton.
+  Defaults `state: active` when absent; preserves the value when present
+  (handoff doesn't flip lifecycle state).
 - `./scripts/handoff.sh --release <slice>` — terminal handoff: clears
-  `owner_session` / `owner_label` / `heartbeat` and sets
-  `state: released`, preserving `owner_agent` / `remaining_actions` /
-  `contract_pointers` / body. Idempotent.
-- `./scripts/handoff.sh --no-auto-commit ...` — opt out of the
-  auto-commit step below.
+  `owner_session`/`owner_label`/`heartbeat` and sets `state: released`,
+  preserving `owner_agent`/`remaining_actions`/`contract_pointers`/body.
+  Idempotent.
+- `./scripts/handoff.sh --no-auto-commit ...` — opt out of the auto-commit
+  step below.
 
 ### Auto-commit on handoff
 
-After the frontmatter write, `handoff.sh` (both claim and release
-paths) auto-commits any UNTRACKED
-`.agent/contracts/<slice>-*.md` and `.agent/plans/<slice>-*.md`
-files **only if the working tree is otherwise clean** (tracked
-modifications to the slice's own baton are allowed and ignored;
-modifications to other tracked files or untracked files belonging to
-other slices' contracts/plans block the auto-commit). On block, a
-single-line warning goes to stderr and handoff still exits 0 — the
-step is non-fatal under all error paths. Pass `--no-auto-commit` to
-skip unconditionally.
-
-## Suggested body structure
-
-```markdown
-# Status: <slice-name> (as of <YYYY-MM-DD>)
-
-## Done
-- <recent milestone>
-- <another>
-
-## In flight
-- <thing being worked on, link to contract>
-
-## Next action
-1. <concrete next step>
-2. <second priority>
-
-## Open risks
-- <risk + mitigation>
-
-## Pointers
-- contract: `.agent/contracts/...`
-- harness: `.agent/projects/<slice>-harness.md`
-- relevant project repo: `<path>`
-```
-
-## Decay
-
-- If mtime > 7 days, the SessionStart hook warns. Refresh it or move
-  to a live scan.
-- If the slice is dormant, write that explicitly (e.g.
-  "Status: dormant since 2026-04-12. Re-evaluate before next sprint").
+After the frontmatter write, `handoff.sh` (both claim and release paths)
+auto-commits any UNTRACKED `.agent/contracts/<slice>-*.md` and
+`.agent/plans/<slice>-*.md` files **only if the working tree is otherwise
+clean** (tracked modifications to the slice's own baton are allowed and
+ignored; modifications to other tracked files or untracked files belonging
+to other slices' contracts/plans block the auto-commit). On block, a
+single-line warning goes to stderr and handoff still exits 0 — the step is
+non-fatal under all error paths. Pass `--no-auto-commit` to skip
+unconditionally.

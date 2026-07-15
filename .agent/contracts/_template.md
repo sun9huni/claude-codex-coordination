@@ -1,58 +1,84 @@
-# Contract: <slice>-<short-topic>-<YYYYMMDD>
+# <task-name>
 
-> Copy this file to `<slice>-<short-topic>-<YYYYMMDD>.md` and fill in
-> every section. A contract is the written commitment that an agent
-> (and the user) sign off on before non-trivial work proceeds.
+## Purpose
 
-## Status
+Describe the user-visible or operational value of this change.
 
-`pending` | `approved` | `done` | `cancelled`
+## Current State
 
-(Start at `pending`. The user marks `approved` before work proceeds.)
+- relevant files/modules
+- current behavior
+- known issues or missing capability
 
-## Scope
+## Assumptions And Questions
 
-What is in scope (one or two paragraphs). Be concrete: files,
-features, behaviors.
+- assumptions:
+- open questions:
+- tradeoffs:
 
-### Out of scope
+## Constraints
 
-What is intentionally excluded so it does not creep in.
+- allowed change scope:
+- forbidden change scope:
+- external constraints:
 
-## Triggers matched (from WORKFLOW.md §2)
+## Non-Goals
 
-- `<trigger 1>` — evidence: `<path or fact>`
-- `<trigger 2>` — evidence: `<path or fact>`
+- out of scope item 1
+- out of scope item 2
 
-## Success criteria
+## Done When
 
-How we will know this contract is satisfied. Observable, measurable:
+- measurable outcome 1
+- measurable outcome 2
+- measurable outcome 3
 
-- [ ] `<criterion 1>` — verification: `<command or check>`
-- [ ] `<criterion 2>` — verification: `<command or check>`
-- [ ] `<criterion 3>` — verification: `<command or check>`
+## Implementation Steps
 
-## Resource budget
+1. inspect current implementation and confirm constraints
+   verify:
+2. implement the minimal change that satisfies the goal
+   verify:
+3. add or update tests
+   verify:
+4. run verification
+   verify:
+5. update docs or handoff if needed
+   verify:
 
-| Resource | Budget | Notes |
-|---|---|---|
-| Files modified | `<N>` |  |
-| Wall-clock time | `<H>` h |  |
-| Compute | `<GPU-h / API-$ / etc.>` |  |
-| External services | `<list>` |  |
+## Change Discipline
 
-## Approval
+- simplest adequate approach:
+- new abstractions introduced:
+- unrelated code touched:
+- pre-existing dead code noticed:
+- request-to-diff trace:
 
-- Requested: `<YYYY-MM-DD>`
-- Approved by: `<user>` on `<YYYY-MM-DD>` — or `pending`.
+## Verification
 
-## Rollback plan
+- `./scripts/verify.sh`
+- `./scripts/browser-check.sh` if this changes web UI
+- task-specific command:
+- Chrome QA:
+  - URL:
+  - desktop viewport:
+  - mobile viewport:
+  - flows checked:
+  - visual issues:
+  - console/runtime issues:
+- manual check:
 
-If this goes wrong:
+## Risks
 
-1. `<step 1>`
-2. `<step 2>`
+- regression risk:
+- integration risk:
+- hidden dependency risk:
 
-## Notes / decisions during execution
+## Rollback
 
-(Append as you go.)
+- revert strategy:
+- containment strategy:
+
+## Progress Log
+
+- YYYY-MM-DD HH:MM: initial plan created

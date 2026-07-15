@@ -1,0 +1,11 @@
+# Identical to good_cluster_then_grid.yaml except mode: feature
+# (the forbidden mode the validator must flag as an error).
+fragmap_conditioning:
+  enabled: true
+  mode: feature
+  fragmap_npz: /mnt/data/users/kim/code/FKSFold-Boltz_Advancement/data/silcs_oracle_real/ternary_r2_maps.npz
+  reference_pdb: /mnt/data/users/kim/code/FKSFold-Boltz_Advancement/data/silcs_oracle_real/ternary_r2/ternary_r2_equil.pdb
+  channels:
+    - acceptor_ether
+    - amide_donor
+    - amide_acceptor

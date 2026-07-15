@@ -1,24 +1,160 @@
 #!/usr/bin/env bash
-# status.sh — read-only slice status: index + discovery scan.
+# status.sh — read-only per-slice status scan.
+# Usage: ./scripts/status.sh           # list slices
+#        ./scripts/status.sh <slice>   # scan one slice
+#        ./scripts/status.sh all       # scan every slice
 #
-# Two modes, both driven entirely by the per-slice status files under
-# $AGENT_DIR/status/*.md (no hardcoded slice names, no external paths):
-#
-#   ./scripts/status.sh            # discovery scan: list every slice + summary
-#   ./scripts/status.sh <slice>    # one slice's status-file summary
-#   ./scripts/status.sh index      # regenerate the derived CURRENT.md index
-#
-# A "slice" is just a `$AGENT_DIR/status/<slice>.md` file (README.md excluded).
-# The discovery scan enumerates those files and prints each slice's name plus
-# its `last_updated`, `heartbeat`, and first `remaining_actions` entry, parsed
-# from the YAML frontmatter (schema in .agent/status/README.md).
+# Sources of truth:
+#   ~/.cursor/plans/*.plan.md         — recent Cursor plans
+#   /mnt/data/.../shared/outputs/     — production-like run outputs
+#   /home/ubuntu/FKSFold-Boltz_Advancement/  — local git tree
+#   /home/ubuntu/arl-threads-coscientist/    — ARL repo
 
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CURSOR_PLANS="$HOME/.cursor/plans"
+LOCAL_REPO="$ROOT/FKSFold-Boltz_Advancement"
+SHARED="/mnt/data/users/ubuntu/workspace/FKSFold-Boltz_Advancement_shared"
+ARL_REPO="$ROOT/arl-threads-coscientist"
 
-# AGENT_ROOT seam: default (unset) = the repo's own .agent, matching handoff.sh.
-AGENT_DIR="${AGENT_ROOT:-$ROOT/.agent}"
+SLICES="fragmap mmgbsa vav1 aigen-fold-core arl harness fea m-relativity"
+
+today() { date -u +%Y-%m-%d; }
+
+section() { printf '\n=== %s ===\n' "$1"; }
+
+# List N newest matches; each line "<mtime-iso> <path>".
+recent_files() {
+  local pattern_dir="$1" pattern="$2" n="${3:-5}"
+  [ -d "$pattern_dir" ] || return 0
+  find "$pattern_dir" -maxdepth 1 -type f -name "$pattern" -printf '%T@ %TY-%Tm-%Td %p\n' 2>/dev/null \
+    | sort -rn | head -"$n" | awk '{print $2, $3}'
+}
+
+recent_dirs() {
+  local pattern_dir="$1" pattern="$2" n="${3:-5}"
+  [ -d "$pattern_dir" ] || return 0
+  find "$pattern_dir" -maxdepth 1 -type d -name "$pattern" -printf '%T@ %TY-%Tm-%Td %p\n' 2>/dev/null \
+    | sort -rn | head -"$n" | awk '{print $2, $3}'
+}
+
+slice_fragmap() {
+  section "FragMap / 9NFR — $(today)"
+  echo "[plans] last 5 fragmap*/target_*/9nfr* plans:"
+  recent_files "$CURSOR_PLANS" "fragmap*.plan.md" 5
+  recent_files "$CURSOR_PLANS" "target_*.plan.md" 5
+  echo
+  echo "[outputs] last 5 fragmap_9nfr_* dirs (shared):"
+  recent_dirs "$SHARED/outputs" "fragmap_9nfr_*" 5
+  echo
+  echo "[analysis] last 5 fragmap/9nfr scripts (local):"
+  if [ -d "$LOCAL_REPO/analysis" ]; then
+    find "$LOCAL_REPO/analysis" -maxdepth 1 -type f \
+      \( -name "*fragmap*" -o -name "*9nfr*" \) -printf '%TY-%Tm-%Td %p\n' \
+      2>/dev/null | sort -r | head -5
+  fi
+}
+
+slice_mmgbsa() {
+  section "MMGBSA / SLURM — $(today)"
+  echo "[outputs] last 5 mmgbsa_* / custom_* dirs (shared):"
+  recent_dirs "$SHARED/outputs" "mmgbsa_*" 5
+  recent_dirs "$SHARED/outputs" "custom_*" 5
+  echo
+  echo "[stage counts] per recent MMGBSA dir:"
+  if [ -d "$SHARED/outputs" ]; then
+    for d in $(find "$SHARED/outputs" -maxdepth 1 -type d -name "mmgbsa_*" \
+                 -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -3 | cut -d' ' -f2-); do
+      printf '  %s\n' "$(basename "$d")"
+      for f in ready_for_mmpbsa_prod.tsv failed_stage.tsv md_done.tsv mmpbsa_done.tsv; do
+        if [ -f "$d/$f" ]; then
+          # subtract 1 for header if file is non-empty
+          n=$(wc -l <"$d/$f" 2>/dev/null || echo 0)
+          [ "$n" -gt 0 ] && n=$((n-1))
+          printf '    %-30s %s rows\n' "$f" "$n"
+        fi
+      done
+    done
+  fi
+}
+
+slice_vav1() {
+  section "VAV1 ranking — $(today)"
+  local L="$LOCAL_REPO/scripts/vav1_ensemble_rank.py"
+  local S="$SHARED/scripts/vav1_ensemble_rank.py"
+  echo "[divergence] vav1_ensemble_rank.py:"
+  [ -f "$L" ] && echo "  local : present  ($(stat -c '%y' "$L" | cut -d' ' -f1))" \
+              || echo "  local : MISSING (deleted in worktree)"
+  [ -f "$S" ] && echo "  shared: present  ($(stat -c '%y' "$S" | cut -d' ' -f1))" \
+              || echo "  shared: MISSING"
+  echo
+  echo "[configs] *ranking*.yaml (local + shared):"
+  for base in "$LOCAL_REPO/configs/vav1_pipeline" "$SHARED/configs/vav1_pipeline"; do
+    [ -d "$base" ] || continue
+    find "$base" -maxdepth 1 -type f -name '*ranking*.yaml' \
+      -printf '%TY-%Tm-%Td %p\n' 2>/dev/null | sort -r | head -5
+  done
+}
+
+slice_aigen_fold_core() {
+  section "AIGEN-Fold core — $(today)"
+  if [ -d "$LOCAL_REPO/.git" ]; then
+    echo "[git] branch: $(git -C "$LOCAL_REPO" branch --show-current 2>/dev/null)"
+    echo "[git] status --short (first 15):"
+    git -C "$LOCAL_REPO" status --short 2>/dev/null | head -15
+    local total
+    total=$(git -C "$LOCAL_REPO" status --short 2>/dev/null | wc -l)
+    echo "[git] total dirty entries: $total"
+  else
+    echo "[git] no .git in $LOCAL_REPO"
+  fi
+  echo
+  echo "[recent edits] last 5 src/analysis files modified:"
+  for sub in src analysis; do
+    [ -d "$LOCAL_REPO/$sub" ] || continue
+    find "$LOCAL_REPO/$sub" -type f -name '*.py' -printf '%TY-%Tm-%Td %p\n' \
+      2>/dev/null | sort -r | head -3
+  done
+}
+
+slice_arl() {
+  section "ARL Co-Scientist — $(today)"
+  if [ ! -d "$ARL_REPO" ]; then echo "  not present"; return; fi
+  echo "[milestones] last 5 PHASE*.md by mtime:"
+  find "$ARL_REPO" -maxdepth 1 -type f -name 'PHASE*.md' \
+    -printf '%TY-%Tm-%Td %f\n' 2>/dev/null | sort -r | head -5
+  echo
+  echo "[git] branch: $(git -C "$ARL_REPO" branch --show-current 2>/dev/null || echo 'n/a')"
+  local dirty
+  dirty=$(git -C "$ARL_REPO" status --short 2>/dev/null | wc -l)
+  echo "[git] dirty entries: $dirty"
+  echo
+  echo "[hint] gate: cd arl-threads-coscientist && make check"
+}
+
+slice_harness() {
+  section "Harness / .agent tooling — $(today)"
+  echo "[contracts] last 5 harness-* contracts:"
+  find "$ROOT/.agent/contracts" -maxdepth 1 -type f -name 'harness-*.md' \
+    -printf '%TY-%Tm-%Td %f\n' 2>/dev/null | sort -r | head -5
+  echo
+  echo "[skills] last 5 .claude/skills SKILL.md by mtime:"
+  find "$ROOT/.claude/skills" -type f -name 'SKILL.md' \
+    -printf '%TY-%Tm-%Td %p\n' 2>/dev/null | sort -r | head -5
+  echo
+  echo "[skills] last 5 team skills by mtime:"
+  find "$ROOT/skills" -type f -name 'SKILL.md' \
+    -printf '%TY-%Tm-%Td %p\n' 2>/dev/null | sort -r | head -5
+  echo
+  echo "[skills] last 5 Codex mirror skills by mtime:"
+  find "$ROOT/.codex/skills" -type f -name 'SKILL.md' \
+    -printf '%TY-%Tm-%Td %p\n' 2>/dev/null | sort -r | head -5
+  echo
+  echo "[git] home repo dirty entries: $(git -C "$ROOT" status --short 2>/dev/null | wc -l)"
+  echo "[git] last 5 harness commits:"
+  git -C "$ROOT" log --oneline -5 --grep='harness' 2>/dev/null | head -5
+}
 
 # ── index mode: regenerate CURRENT.md as a DERIVED lab-wide index ─────────────
 # Scans every $AGENT_DIR/status/*.md (except README.md), parses the per-slice
@@ -384,112 +520,52 @@ PYEOF
   fi
 }
 
-# ── frontmatter field extractor ───────────────────────────────────────────────
-# Pull a single scalar field, or the first `remaining_actions` entry (block or
-# flow list), from a status file's YAML frontmatter. Pure awk so the discovery
-# scan needs no python. `field` is a key name, or the special token
-# `first_action`.
-fm_field() {
-  local file="$1" field="$2"
-  awk -v want="$field" '
-    NR == 1 && $0 ~ /^---[[:space:]]*$/ { infm = 1; next }
-    infm && $0 ~ /^---[[:space:]]*$/    { exit }
-    !infm { next }
-
-    # Special: first item of the remaining_actions list (block or flow form).
-    want == "first_action" {
-      if ($0 ~ /^remaining_actions[[:space:]]*:/) {
-        # Flow form on the key line: remaining_actions: ["a", "b"].
-        # Best-effort first-comma split (no quote-awareness): a quoted item
-        # containing a comma truncates at the comma; index mode handles it.
-        rest = $0
-        sub(/^remaining_actions[[:space:]]*:[[:space:]]*/, "", rest)
-        if (rest ~ /^\[/) {
-          sub(/^\[[[:space:]]*/, "", rest)
-          sub(/[[:space:]]*,.*/, "", rest)
-          sub(/[[:space:]]*\].*/, "", rest)
-          gsub(/^["'\'']|["'\'']$/, "", rest)
-          if (rest != "") { print rest; exit }
-        }
-        inact = 1; next
-      }
-      if (inact) {
-        if ($0 ~ /^[[:space:]]*-[[:space:]]/) {
-          line = $0
-          sub(/^[[:space:]]*-[[:space:]]*/, "", line)
-          gsub(/^["'\'']|["'\'']$/, "", line)
-          print line
-          exit
-        }
-        if ($0 ~ /^[^[:space:]]/) { exit }   # next key — no items found
-      }
-      next
-    }
-
-    # Scalar key: value
-    $0 ~ ("^" want "[[:space:]]*:") {
-      line = $0
-      sub(/^[^:]*:[[:space:]]*/, "", line)
-      gsub(/^["'\'']|["'\'']$/, "", line)
-      print line
-      exit
-    }
-  ' "$file"
-}
-
-# Print a one-slice summary block from its status file.
-scan_one() {
-  local slice="$1"
-  local status_dir="$AGENT_DIR/status"
-  local file="$status_dir/$slice.md"
-  if [ ! -f "$file" ]; then
-    echo "unknown slice: $slice (no $file)" >&2
-    list_slices >&2
-    exit 2
-  fi
-  local lu hb act
-  lu="$(fm_field "$file" last_updated)"
-  hb="$(fm_field "$file" heartbeat)"
-  act="$(fm_field "$file" first_action)"
-  echo "=== $slice ==="
-  echo "  last_updated : ${lu:-—}"
-  echo "  heartbeat    : ${hb:-—}"
-  echo "  next action  : ${act:-—}"
-  echo "  status file  : $file"
-}
-
-# Discovery scan: enumerate every $AGENT_DIR/status/*.md (except README.md) and
-# print a per-slice summary. No hardcoded slice names.
 list_slices() {
-  local status_dir="$AGENT_DIR/status"
-  if [ ! -d "$status_dir" ]; then
-    echo "[scan] error: status dir not found: $status_dir" >&2
-    exit 1
-  fi
-  echo "Slices (from $status_dir):"
+  echo "Usage: $0 <slice>"
+  echo "Slices:"
+  for s in $SLICES; do echo "  - $s"; done
+  echo "  - all"
   echo
-  local f any=0
-  for f in "$status_dir"/*.md; do
-    [ -e "$f" ] || continue
-    [ "$(basename "$f")" = "README.md" ] && continue
-    any=1
-    local slice
-    slice="$(basename "$f" .md)"
-    scan_one "$slice"
-    echo
-  done
-  if [ "$any" -eq 0 ]; then
-    echo "  (no status files found)"
-  fi
-  echo "Index view: $0 index  →  regenerates $AGENT_DIR/handoffs/CURRENT.md"
+  echo "Stored summaries: .agent/status/<slice>.md"
+}
+
+slice_fea() {
+  section "FEA — AIGEN-Fold Experiment Autopilot — $(today)"
+  echo "[contracts/plans] last 5 experiment-autopilot files:"
+  find "$ROOT/.agent/contracts" "$ROOT/.agent/plans" -maxdepth 1 -type f \
+    -name '*experiment-autopilot*' -printf '%TY-%Tm-%Td %p\n' 2>/dev/null \
+    | sort -r | head -5
+  echo
+  echo "[code] last 5 scripts/fea files by mtime:"
+  find "$ROOT/scripts/fea" -type f -name '*.py' \
+    -printf '%TY-%Tm-%Td %p\n' 2>/dev/null | sort -r | head -5
+  echo
+  echo "[git] last 5 autopilot/fea commits:"
+  git -C "$ROOT" log --oneline -5 --grep='autopilot' 2>/dev/null | head -5
 }
 
 main() {
   local arg="${1:-}"
   case "$arg" in
     "" | "-h" | "--help") list_slices ;;
-    index | --index)      index_mode ;;
-    *)                    scan_one "$arg" ;;
+    all)
+      slice_fragmap
+      slice_mmgbsa
+      slice_vav1
+      slice_aigen_fold_core
+      slice_arl
+      slice_harness
+      slice_fea
+      ;;
+    index | --index) index_mode ;;
+    fragmap)       slice_fragmap ;;
+    mmgbsa)        slice_mmgbsa ;;
+    vav1)          slice_vav1 ;;
+    aigen-fold-core)  slice_aigen_fold_core ;;
+    arl)           slice_arl ;;
+    harness)       slice_harness ;;
+    fea)           slice_fea ;;
+    *) echo "unknown slice: $arg" >&2; list_slices >&2; exit 2 ;;
   esac
 }
 

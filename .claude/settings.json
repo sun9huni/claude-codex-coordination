@@ -1,15 +1,47 @@
 {
-  "model": "opus[1m]",
-  "effortLevel": "medium",
   "permissions": {
-    "allow": [],
-    "additionalDirectories": []
+    "allow": [
+      "Read(/home/ubuntu/FKSFold-Boltz_Advancement/**)",
+      "Read(/tmp/**)",
+      "Read(/mnt/data/**)",
+      "Bash(cp .claude/hooks/pre-bash-destructive-gate.sh /home/ubuntu/.claude/hooks/)",
+      "Bash(cp .claude/hooks/session-start-decay-check.sh /home/ubuntu/.claude/hooks/)",
+      "Bash(cp .claude/hooks/optional/pre-bash-slurm-gate.sh /home/ubuntu/.claude/hooks/)",
+      "Bash(cp .claude/hooks/optional/pre-bash-db-gate.sh /home/ubuntu/.claude/hooks/)",
+      "Bash(cp .claude/hooks/pre-compact-inject.sh /home/ubuntu/.claude/hooks/)",
+      "Bash(cp /home/ubuntu/scratch/claude-codex-coordination/.claude/hooks/stop-handoff-check.sh /home/ubuntu/.claude/hooks/)",
+      "Bash(sed -i 's|VALID_SLICES = set\\(\\).*|VALID_SLICES = {\"fragmap\", \"mmgbsa\", \"vav1\", \"aigen-fold-core\", \"arl\"}|' /home/ubuntu/.claude/hooks/stop-handoff-check.sh)",
+      "Bash(bash /home/ubuntu/.claude/statusline.sh)",
+      "Bash(bash /home/ubuntu/.claude/hooks/pre-compact-inject.sh)",
+      "Bash(mkdir -p /home/ubuntu/.claude/skills/meeting-report)",
+      "Edit(/.claude/skills/meeting-report/**)",
+      "Bash(bash tests/run-skill-lint.sh)",
+      "Bash(find . -maxdepth 4 -name '*.git' -prune -o -type d -name 'analysis' -print 2>/dev/null | head; ls -d /mnt/data/users/ubuntu/workspace/*/ 2>/dev/null | head)",
+      "Read(//mnt/data/users/ubuntu/workspace/**)",
+      "Bash(ls -lat /mnt/data/users/kim/fksfold_outputs/ 2>&1 | head -10)",
+      "Read(//mnt/data/users/kim/fksfold_outputs/**)",
+      "Bash(ls -la /mnt/data/users/kim/fksfold_outputs/9d0w_overfit_20260521_165307/ 2>&1 | head -30 && echo \"---\" && find /mnt/data/users/kim/fksfold_outputs/9d0w_overfit_20260521_165307/ -maxdepth 3 -name \"*.csv\" -o -name \"*.json\" -o -name \"*.md\" 2>&1 | head -20)",
+      "Read(//mnt/data/users/kim/fksfold_outputs/9d0w_overfit_20260521_165307/**)",
+      "Bash(ls -la /mnt/data/users/ubuntu/logs/vav1_ab_multiseed* 2>&1 | head -20)",
+      "Read(//mnt/data/users/ubuntu/logs/**)",
+      "Edit(/.claude/skills/debug/**)",
+      "Bash(find /mnt/data -type d -name \"*norm143_full_20260519*\" 2>/dev/null | head -5)",
+      "Read(//mnt/data/**)",
+      "Bash(sudo -u kim bash -c 'ls -dt /mnt/data/users/kim/fksfold_outputs/*norm143* /mnt/data/users/kim/fksfold_outputs/*9nfr* /mnt/data/users/kim/fksfold_outputs/*fragmap* 2>/dev/null | head -15')",
+      "Bash(sudo -u kim bash -c 'for d in $\\(ls -dt /mnt/data/users/kim/fksfold_outputs/*norm143*20260519* /mnt/data/users/kim/fksfold_outputs/*9nfr*ablat* /mnt/data/users/kim/fksfold_outputs/*9nfr*20260519* 2>/dev/null | head -4\\); do echo \"--- $d ---\"; find \"$d\" -maxdepth 3 \\\\\\( -iname \"*conditioning*\" -o -iname \"*fragmap*yaml\" -o -iname \"args*.json\" -o -iname \"run_config*\" -o -iname \"cmd*.txt\" \\\\\\) 2>/dev/null | head -6; done')",
+      "Bash(/home/ubuntu/miniconda3/bin/python /tmp/map_completeness.py)",
+      "Bash(sudo -u kim /home/ubuntu/miniconda3/bin/python /tmp/sampling_depth.py)",
+      "Bash(sudo -u kim bash -c 'ls -la __TRACKED_VAR__/traj.dcd __TRACKED_VAR__/acceptance_summary.json 2>/dev/null | awk '\\\\''{print $6,$7,$8,$9}'\\\\''')",
+      "Bash(sudo -u kim bash -c \"head -50 /mnt/data/users/kim/code/FKSFold-Boltz_Advancement/data/silcs_oracle_real/ternary_expanded_5rep_20260430/ternary_r2/formamide/muex_neg5p0/replica_1/gcmc.log 2>/dev/null\")",
+      "Bash(sudo -u kim python3 -c \"import json; d=json.load\\(open\\('/mnt/data/users/kim/code/FKSFold-Boltz_Advancement/data/silcs_oracle_real/ternary_expanded_5rep_20260430/ternary_r2/formamide/muex_neg5p0/replica_1/acceptance_summary.json'\\)\\); print\\('platform:', d.get\\('platform'\\)\\); print\\('cycles:', d.get\\('cycles'\\)\\); print\\('md_steps_per_cycle:', d.get\\('md_steps_per_cycle'\\)\\); print\\('gcmc_moves_per_cycle:', d.get\\('gcmc_moves_per_cycle'\\)\\)\")"
+    ],
+    "additionalDirectories": [
+      "/home/ubuntu/FKSFold-Boltz_Advancement",
+      "/mnt/data/users/kim/logs",
+      "/home/ubuntu/.claude/skills"
+    ]
   },
-  "statusLine": {
-    "type": "command",
-    "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/statusline.sh",
-    "padding": 1
-  },
+  "model": "sonnet",
   "hooks": {
     "SessionStart": [
       {
@@ -17,7 +49,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-start-decay-check.sh",
+            "command": "/home/ubuntu/.claude/hooks/session-start-decay-check.sh",
             "timeout": 30
           }
         ]
@@ -29,7 +61,17 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre-bash-destructive-gate.sh",
+            "command": "/home/ubuntu/.claude/hooks/pre-bash-slurm-gate.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "/home/ubuntu/.claude/hooks/pre-bash-destructive-gate.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "/home/ubuntu/.claude/hooks/pre-bash-db-gate.sh",
             "timeout": 10
           }
         ]
@@ -41,7 +83,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post-edit-format.sh",
+            "command": "/home/ubuntu/.claude/hooks/post-edit-format.sh",
             "timeout": 30
           }
         ]
@@ -53,7 +95,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre-compact-inject.sh",
+            "command": "/home/ubuntu/.claude/hooks/pre-compact-inject.sh",
             "timeout": 30
           }
         ]
@@ -65,7 +107,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop-handoff-check.sh",
+            "command": "/home/ubuntu/.claude/hooks/stop-handoff-check.sh",
             "timeout": 30
           }
         ]
@@ -77,11 +119,20 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-end-cleanup.sh",
+            "command": "/home/ubuntu/.claude/hooks/session-end-cleanup.sh",
             "timeout": 10
           }
         ]
       }
     ]
-  }
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "/home/ubuntu/.claude/statusline.sh",
+    "padding": 1
+  },
+  "autoUpdatesChannel": "latest",
+  "skipAutoPermissionPrompt": true,
+  "effortLevel": "xhigh",
+  "switchModelsOnFlag": false
 }
