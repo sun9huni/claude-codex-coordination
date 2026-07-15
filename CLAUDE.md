@@ -60,6 +60,12 @@ find yourself about to save a `project_*.md` to memory, write to
 `.agent/status/<slice>.md` instead (never to the derived
 `CURRENT.md` index).
 
+## Korean Output Style
+
+If your workspace uses Korean deliverables, follow
+`AGENTS.md` §"Korean Output Style". Preserve technical meaning and avoid
+AI-sounding filler, decorative emphasis, and em-dashes.
+
 ## End-of-session
 
 When stopping, switching agents, or near context limit:

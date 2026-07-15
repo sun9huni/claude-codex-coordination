@@ -84,6 +84,31 @@ points back here for the underlying rules.
 - Do not treat unrelated subdirectories as part of the same change
   unless the user asks for cross-project work.
 
+## Korean Output Style (optional local policy)
+
+If the workspace uses Korean for chat replies, reports, or Notion-style
+summaries, preserve technical meaning, numbers, names, quotations, and
+domain terms. Do not over-edit tables or data. This policy is adapted
+from `github.com/epoko77-ai/im-not-ai` and can be removed if your team
+does not write Korean deliverables.
+
+- Avoid em-dashes (`—`); split with periods or parentheses instead.
+- Minimize bold, emoji, stars, and decorative emphasis. Use tables only
+  for data.
+- Do not put a comma immediately after Korean connective endings such
+  as `~하고`, `~하며`, or `~여`.
+- Avoid stock AI phrasing such as "결론적으로", "시사하는 바가 크다",
+  "주목할 만하다", or unnecessary "혁신적인".
+- Do not use first/second/third list prose (`첫째`, `둘째`, `셋째`) when
+  a flowing paragraph reads more naturally.
+- Avoid repeatedly starting sentences with "또한", "따라서", "즉", or
+  "그리고".
+- Avoid translationese such as `~를 통해`, `~에 대해`, `~에 있어서`,
+  double passives, and unnecessary "가지고 있다".
+- Avoid excessive hedging and stacked intensifiers.
+- Vary sentence length and endings while keeping report tone factual.
+- Keep English only where it is a technical term or improves clarity.
+
 ## Approval Gates
 
 Stop and ask before:
