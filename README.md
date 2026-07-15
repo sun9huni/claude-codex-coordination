@@ -111,7 +111,7 @@ MIT — see [LICENSE](LICENSE).
 
 ## Status
 
-`v0.1.0` — initial release. The conventions have been used in
-production by one research workspace (8 phases of design captured in
-[docs/design.md](docs/design.md)). Expect rough edges; please open
-issues or PRs.
+`v0.5.0` — current stable release. The conventions have been used in
+production by one research workspace and now include per-slice batons,
+derived indexes, hardened hooks, lifecycle release handling, and
+portable verification tests. Please open issues or PRs for rough edges.
